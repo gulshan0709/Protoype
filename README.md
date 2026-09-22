@@ -22,6 +22,20 @@ npm run preview
 
 Use Node 22.13+ (Node 24 was used for verification). Web hosting must serve `dist/index.html` as the SPA fallback for navigation URLs.
 
+## GitHub Pages
+
+The published web app is hosted at **https://realcoderz.github.io/vizenta-ui/**.
+
+```powershell
+npm run deploy
+```
+
+This builds the site into `dist-pages` and publishes it to the `gh-pages` branch.
+GitHub Pages serves that branch from `/ (root)`. To build without publishing, run
+`npm run build:pages`. The Pages build uses `/vizenta-ui` as its base path, adjusts
+the favicon URL, and includes HTML entry points for login, signup, and password
+recovery. Standard web and native builds keep their existing configuration.
+
 ## Login and sign-up
 
 Across the app, filled buttons use white text and icons: deeper cyan for primary and selected actions, navy for secondary actions, teal for exports, and purple for assistant actions. Shared action tokens cover hover, pressed, and disabled states in both light and dark themes; text links retain their cyan treatment.
