@@ -1,0 +1,22 @@
+[
+  {
+    "industry": "education",
+    "roles": 7,
+    "pages": 180
+  },
+  {
+    "industry": "corporate",
+    "roles": 8,
+    "pages": 203
+  },
+  {
+    "industry": "retail",
+    "roles": 7,
+    "pages": 145
+  },
+  {
+    "industry": "manufacturing",
+    "roles": 7,
+    "pages": 224
+  }
+]

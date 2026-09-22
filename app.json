@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Vizenta AI",
+    "slug": "vizenta-ai",
+    "scheme": "vizenta",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "ios": { "supportsTablet": true, "bundleIdentifier": "ai.vizenta.workspace" },
+    "android": { "package": "ai.vizenta.workspace" },
+    "web": { "bundler": "metro", "output": "single", "name": "Vizenta AI" },
+    "plugins": ["expo-router", "expo-font"]
+  }
+}

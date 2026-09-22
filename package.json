@@ -1,0 +1,50 @@
+{
+  "name": "vizenta-ai",
+  "version": "1.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "web": "expo start --web",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "build:web": "expo export --platform web",
+    "build:native": "expo export --platform ios --platform android --output-dir dist-native",
+    "typecheck": "tsc --noEmit",
+    "contracts:import": "node scripts/import-contracts.cjs",
+    "test": "node --test tests/contracts.test.cjs",
+    "test:ui": "node scripts/verify-ui.cjs",
+    "test:auth": "node scripts/verify-auth.cjs",
+    "test:showcase": "node scripts/verify-auth-showcase.cjs",
+    "test:motion": "node scripts/verify-motion.cjs",
+    "test:coverage": "node scripts/verify-coverage.cjs",
+    "preview": "node scripts/serve.cjs",
+    "format": "prettier --write \"app/**/*.tsx\" \"src/**/*.ts\" \"src/**/*.tsx\" \"scripts/*.cjs\" \"tests/*.cjs\""
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~57.0.15",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~57.0.23",
+    "expo-constants": "~57.0.18",
+    "expo-file-system": "~57.0.7",
+    "expo-font": "~57.0.4",
+    "expo-linking": "~57.0.10",
+    "expo-router": "~57.0.21",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-reanimated": "4.5.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.2",
+    "react-native-worklets": "0.10.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "playwright": "^1.62.1",
+    "prettier": "^3.9.8",
+    "typescript": "~6.0.3"
+  }
+}
