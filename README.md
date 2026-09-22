@@ -7,8 +7,8 @@ A standalone, universal customer UI for **Education, Corporate, Retail & Warehou
 The built preview is served at **http://localhost:8082** while the preview process is running.
 
 ```powershell
-git clone https://github.com/RealcoderZ/vizenta-ui.git
-cd vizenta-ui
+git clone https://github.com/gulshan0709/Protoype.git
+cd Protoype
 npm ci
 npm run web
 ```
@@ -24,7 +24,7 @@ Use Node 22.13+ (Node 24 was used for verification). Web hosting must serve `dis
 
 ## GitHub Pages
 
-The GitHub Pages deployment target is **https://realcoderz.github.io/vizenta-ui/**.
+The GitHub Pages deployment target is **https://gulshan0709.github.io/Protoype/**.
 
 ```powershell
 npm run deploy
@@ -33,7 +33,7 @@ npm run deploy
 This builds the site into `dist-pages` and publishes it to the `gh-pages` branch.
 GitHub Pages serves that branch from `/ (root)`. To build without publishing, run
 `npm run build:pages`, then run `npm run test:pages` to verify the exported site.
-The Pages build uses `/vizenta-ui` as its base path, adjusts
+The Pages build uses `/Protoype` as its base path, adjusts
 the favicon URL, and includes HTML entry points for login, signup, and password
 recovery. Standard web and native builds keep their existing configuration.
 

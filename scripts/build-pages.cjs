@@ -4,7 +4,7 @@ const { spawnSync } = require("node:child_process");
 
 const root = path.resolve(__dirname, "..");
 const output = path.join(root, "dist-pages");
-const baseUrl = "/vizenta-ui";
+const baseUrl = "/Protoype";
 const cli = path.join(
   path.dirname(require.resolve("expo/package.json")),
   "bin/cli",
@@ -44,4 +44,4 @@ for (const route of ["login", "register", "forgot-password"]) {
 }
 fs.writeFileSync(path.join(output, "404.html"), html);
 fs.writeFileSync(path.join(output, ".nojekyll"), "");
-console.log("GitHub Pages build ready in dist-pages at /vizenta-ui/.");
+console.log(`GitHub Pages build ready in dist-pages at ${baseUrl}/.`);

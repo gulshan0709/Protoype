@@ -6,7 +6,7 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "../dist-pages");
 const output = path.resolve(__dirname, "../qa");
-const prefix = "/vizenta-ui";
+const prefix = "/Protoype";
 const types = {
   ".html": "text/html",
   ".js": "text/javascript",
