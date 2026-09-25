@@ -26,20 +26,31 @@ Use Node 22.13+ (Node 24 was used for verification). Web hosting must serve `dis
 
 The GitHub Pages deployment target is **https://gulshan0709.github.io/Protoype/**.
 
+In repository **Settings → Pages → Build and deployment**, set **Source** to
+**GitHub Actions**. The workflow in [.github/workflows/pages.yml](.github/workflows/pages.yml)
+installs dependencies, checks types and contracts, builds the Expo app, and deploys
+only `dist-pages`. It runs when changes reach `main`, or manually through
+**Actions → Deploy Vizenta app to GitHub Pages → Run workflow** on `main`.
+The workflow must be committed and pushed before GitHub can run it.
+
+Publishing the source branch directly can show this README instead of the app:
+GitHub's default branch build does not run the Expo export. A successful default
+Pages job therefore does not mean the application was built.
+
+To build and verify locally without publishing:
+
 ```powershell
-npm run deploy
+npm run build:pages
+npm run test:pages
 ```
 
-This builds the site into `dist-pages` and publishes it to the `gh-pages` branch.
-GitHub Pages serves that branch from `/ (root)`. To build without publishing, run
-`npm run build:pages`, then run `npm run test:pages` to verify the exported site.
 The Pages build uses `/Protoype` as its base path, adjusts
 the favicon URL, and includes HTML entry points for login, signup, and password
 recovery. Standard web and native builds keep their existing configuration.
 
-Enable the site in repository **Settings → Pages → Deploy from a branch**, using
-`gh-pages` and `/ (root)`. Private repositories require a GitHub plan that supports
-Pages. Publishing the branch alone does not enable the site.
+The legacy `npm run deploy` command publishes to the `gh-pages` branch and is only
+for repositories configured with **Deploy from a branch → gh-pages → / (root)**.
+Use the Actions workflow for the setup described above.
 
 ## Login and sign-up
 
