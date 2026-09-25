@@ -10,6 +10,7 @@ import Svg, {
 } from "react-native-svg";
 import { useTheme } from "../theme/Theme";
 const paths: Record<string, string> = {
+  more: "M12 5h.01M12 12h.01M12 19h.01",
   home: "M3 10 12 3l9 7v10H3ZM9 20v-7h6v7",
   grid: "M3 3h7v7H3ZM14 3h7v7h-7ZM3 14h7v7H3ZM14 14h7v7h-7Z",
   class: "M3 4h18v13H3ZM8 21l4-4 4 4M7 9h4M7 13h9",

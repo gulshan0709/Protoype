@@ -1,0 +1,1 @@
+Gate clips and capture frames are excerpts from OpenCV samples/data/vtest.avi: https://github.com/opencv/opencv/blob/master/samples/data/vtest.avi . Used as local demonstration footage, not a live camera feed. Three eight-second H.264 clips with corresponding JPEG captures. The reference skillatracker-ui-demo supplies media through APIs and includes no recording files.

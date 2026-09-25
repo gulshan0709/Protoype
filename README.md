@@ -83,6 +83,20 @@ This command exports the iOS and Android JavaScript/Hermes bundles. It does **no
 
 ## What is implemented
 
+Class and lab setup is available under **Class & Lab Attendance** for Customer
+Admin (Coverage) and Dean/Coordinator (Classes and Labs). Use **Add** or **Bulk
+upload** above the table. Each row's actions offer **Learners**, **Edit**, and
+**Delete**. CSV upload includes class/lab templates, validation and duplicate
+review; learner actions support mapping, removal and CSV export. These controls
+use the existing theme, forms, dialogs, tables and column preferences.
+
+Class/lab changes and learner mappings stay in memory for the current app session.
+They survive navigation, are isolated by role/page and assigned scope, and reset
+on reload. Existing attendance and camera measurements remain source snapshots.
+No class or SIS backend is connected. Run `npm run test:class-setup` against the
+local app to check creation, upload, edit/delete, learners, scopes and mobile/dark
+layouts; `VIZENTA_QA_URL` overrides the default `http://localhost:8083`.
+
 - Four industry workspaces; all 29 supplied roles; 752 base role/page contracts with Store/Warehouse variants. The supplied 894 review configurations can be traversed through the same application shell.
 - Persona-specific Organization navigation and entitled Presence, Safety and Insights products. Store location managers do not receive Guard navigation.
 - Desktop sidebar, collapsible navigation, tablet/phone bottom navigation, phone record cards, responsive tables and full record detail pages.
@@ -133,3 +147,17 @@ This is an interactive frontend with fictional reference data and device-local p
 Only the implemented local lifecycle actions change sample workflow state. Configuration, policy, operational and other actions collect auditable review requests; they do not claim to change a live service. Authored aggregate KPIs remain source snapshots and are not recalculated from three-row samples or local actions. The assistant explicitly identifies its sample-data scope.
 
 The build currently bundles the complete review fixture corpus to make every reference flow available offline. Replace it with scoped, paginated API responses before production deployment; the complete fixture bundle is not a production data-loading strategy.
+
+Learner management follows the same session-based flow: Customer Admin > Class & Lab Attendance > Learners (also available to Dean and Coordinator). Add, edit, delete, or bulk upload a CSV using the downloadable template. Existing UIDs and invalid rows must be corrected; duplicate CSV rows are skipped. Source attendance values are preserved when editing learner identity.
+
+Customer Admin camera management is available in Class & Lab Attendance > Sources and Gate > Cameras. Add one or more cameras per location, edit configuration, or confirm deletion. Changes remain in the session; live camera health is preserved and credentials are excluded from table and detail views.
+
+Surveillance Users is available under Organization for Vizenta Admin and Customer Admin. Add, edit, delete or CSV-import Identified, Threat and Visitor users, with profile images and visitor validity dates. Duplicate UIDs/emails are blocked. Counts reflect session records in the selected customer or campus; the recognition service is not connected.
+
+The Warden product is available to Customer Admin and Vizenta Admin with Wardens, Hostels and Leave Management tabs. Add/edit/delete records, assign wardens and hostels, configure sub-admin permissions, and create or update pending leave. Changes stay in the session; permissions describe configuration and do not create login accounts.
+
+Customer Admin Sources & Setup includes module/notification/retention settings, camera setup, shifts, camera criteria, a camera dashboard, surveillance attendance and video references. Settings are scoped to the current workspace and retained for the session. Camera and shift records support add/edit/delete. Video references only play when a recording service supplies media.
+
+Demo data is completed by src/domain/contracts/demoData.ts after the reference contracts load. All four industries retain their operational scenarios. Education adds configured camera connections, shifts, warden contacts and hostel assignments, class rosters, surveillance contact details and matching camera recognitions. Setup opens with configured service, notification, retention and camera-quality values. The demo-data test checks every table (including retail variants), management form validity and cross-record assignments.
+
+In/Out, Gate User Attendance and Shield recognition views include profile/capture images. Shield Video Analytics and the Surveillance Dashboard play local H.264 recordings with standard controls; clicking a capture opens an image preview. Media behavior follows skillatracker-ui-demo; that project retrieves recordings from APIs, so the bundled footage uses OpenCV pedestrian clips (see assets/media/README.md). No streaming service is contacted.

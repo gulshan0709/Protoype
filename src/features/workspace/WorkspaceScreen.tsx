@@ -1,3 +1,29 @@
+import { SourcesSetupDialog } from "./components/SourcesSetupDialog";
+import { SetupView, CriteriaView, DashboardView } from "./components/SetupTabs";
+import { ResidenceSetupDialog } from "./components/ResidenceSetupDialog";
+import {
+  wardenMetrics,
+  hostelMetrics,
+  leaveMetrics,
+  leaveEditable,
+} from "./components/WardenSetup";
+import {
+  attendanceMetrics,
+  inOutMetrics,
+  absentRowsFromUsers,
+  markedRecord,
+} from "../../domain/gate/attendance";
+import { MarkAttendanceForm } from "./components/MarkAttendanceForm";
+import { storeEditedRecord } from "../../application/classSetupStore";
+import {
+  surveillanceEnabled,
+  userMetrics,
+} from "../../domain/surveillance/setup";
+import { SurveillanceUserDialog } from "./components/SurveillanceUserDialog";
+import { cameraSetupVariant } from "../../domain/cameras/setup";
+import { CameraSetupDialog } from "./components/CameraSetupDialog";
+import { learnerSetupEnabled } from "../../domain/learners/setup";
+import { LearnerSetupDialog } from "./components/LearnerSetupDialog";
 import React, {
   useState,
   useMemo,
@@ -56,6 +82,12 @@ import { Settings } from "./components/Settings";
 import { Login } from "./components/Login";
 import { LaunchScreen } from "../../shared/ui/LaunchScreen";
 import { MotionView } from "../../shared/motion/MotionView";
+import { applySetup, useSetupState } from "../../application/classSetupStore";
+import { kindOf, setupKinds } from "../../domain/classes/setup";
+import {
+  ClassSetupDialog,
+  type ClassSetupRequest,
+} from "./components/ClassSetupDialog";
 
 const titles: Record<string, string> = {
   workspace: "Your workspaces",
@@ -81,6 +113,7 @@ export default function WorkspaceScreen() {
     tab?: string;
     record?: string;
     metric?: string;
+    userGroup?: string;
   }>();
   const [modal, setModal] = useState("");
   const [collapsed, setCollapsed] = useState(false);
@@ -90,6 +123,8 @@ export default function WorkspaceScreen() {
   const [preview, setPreview] = useState("populated");
   const [action, setAction] = useState<Action>();
   const [exportRecord, setExportRecord] = useState<DataRecord>();
+  const [classSetup, setClassSetup] = useState<ClassSetupRequest>();
+  const setupState = useSetupState();
   const scroll = useRef<ScrollView>(null);
   const industry = industries[app.workspace.industry];
   const role = industry.core.roles[app.workspace.role];
@@ -102,23 +137,121 @@ export default function WorkspaceScreen() {
         metric: params.metric,
       }
     : homeLocation(app.workspace);
-  const page = getPage(app.workspace, location);
+  const peopleUsers = app.workspace.industry === "education" &&
+    location.type === "org" && location.name === "People & Access" &&
+    location.tab === "Users" && ["customer_admin", "vizenta_admin"].includes(app.workspace.role);
+  const userPages = industry.pages[app.workspace.role];
+  const peopleGroups = [
+    { value: "learners", label: "Learners", page: userPages?.product["Class & Lab Attendance"]?.Learners },
+    { value: "surveillance", label: "Surveillance users", page: userPages?.org["Surveillance Users"]?.Users },
+    { value: "accounts", label: "Workspace users", page: getPage(app.workspace, location) },
+  ].filter((group) => !!group.page);
+  const selectedPeopleGroup = peopleGroups.find((group) => group.value === params.userGroup) ?? peopleGroups[0];
+  const sourcePage = peopleUsers ? selectedPeopleGroup?.page : getPage(app.workspace, location);
+  const page = peopleUsers && sourcePage ? {
+    ...sourcePage,
+    columns: sourcePage.columns.map((column, index) => index === 0 ? { ...column, label: "User" } : column),
+  } : sourcePage;
   const branch = getBranch(app.workspace, location.type, location.name);
+  const learnerManagement = learnerSetupEnabled(app.workspace, page?.id);
+  const cameraManagement = !!cameraSetupVariant(app.workspace, page?.id);
+  const surveillanceManagement = surveillanceEnabled(app.workspace, page?.id);
+  const residenceManagement =
+    app.workspace.industry === "education" &&
+    ["customer_admin", "vizenta_admin"].includes(app.workspace.role) &&
+    /^(ca|va)-warden-(wardens|hostels|leaves)$/.test(page?.id ?? "");
+  const sourcesManagement =
+    app.workspace.industry === "education" &&
+    app.workspace.role === "customer_admin" &&
+    ["ca-setup-cameras", "ca-setup-shifts"].includes(page?.id ?? "");
+  const SetupDialog = sourcesManagement
+    ? SourcesSetupDialog
+    : residenceManagement
+      ? ResidenceSetupDialog
+      : surveillanceManagement
+        ? SurveillanceUserDialog
+        : cameraManagement
+          ? CameraSetupDialog
+          : learnerManagement
+            ? LearnerSetupDialog
+            : ClassSetupDialog;
+  const classKinds =
+    learnerManagement ||
+    cameraManagement ||
+    surveillanceManagement ||
+    residenceManagement ||
+    sourcesManagement
+      ? ["class" as const]
+      : setupKinds(app.workspace, page?.id);
+  const classStoreKey = JSON.stringify([
+    app.workspace.industry,
+    app.workspace.role,
+    page?.id,
+  ]);
+  const [markingId, setMarkingId] = useState<string>();
+  const gateAttendancePage = page?.detailType === "gate_attendance";
+  const surveillancePage =
+    industry.pages[app.workspace.role]?.org["Surveillance Users"]?.Users;
+  const attendanceUsers =
+    gateAttendancePage && surveillancePage
+      ? applySetup(
+          setupState,
+          JSON.stringify([
+            app.workspace.industry,
+            app.workspace.role,
+            surveillancePage.id,
+          ]),
+          app.workspace.scope,
+          scopedRecords(surveillancePage, app.workspace.scope),
+        )
+      : [];
   const rows = useMemo(
     () =>
       page
-        ? scopedRecords(page, app.workspace.scope).map((r) =>
-            localRecord(r, page.id, app.workspace, app.audit),
-          )
+        ? applySetup(setupState, classStoreKey, app.workspace.scope, [
+            ...scopedRecords(page, app.workspace.scope),
+            ...(gateAttendancePage
+              ? absentRowsFromUsers(page, attendanceUsers)
+              : []),
+          ]).map((r) => {
+            const record = localRecord(r, page.id, app.workspace, app.audit);
+            return record;
+          })
         : [],
-    [page, app.workspace, app.audit],
+    [page, app.workspace, app.audit, setupState, classStoreKey],
   );
+  const sourceTabRows = (tab: string) => {
+    const p =
+      industry.pages[app.workspace.role]?.org["Sources & Setup"]?.[tab] ??
+      industry.pages[app.workspace.role]?.product.Shield?.[tab];
+    return p
+      ? applySetup(
+          setupState,
+          JSON.stringify([app.workspace.industry, app.workspace.role, p.id]),
+          app.workspace.scope,
+          scopedRecords(p, app.workspace.scope),
+        )
+      : [];
+  };
   const filtered = useMemo(
     () => filterRecords(rows, query, filters),
     [rows, query, filters],
   );
   const record = rows.find((r) => r.id === location.record);
-  const metric = page?.metrics.find((m) => m.label === location.metric);
+  const pageMetrics = residenceManagement
+    ? page?.detailType === "warden"
+      ? wardenMetrics(rows)
+      : page?.detailType === "hostel"
+        ? hostelMetrics(rows)
+        : leaveMetrics(rows)
+    : surveillanceManagement
+      ? userMetrics(rows)
+      : gateAttendancePage
+        ? attendanceMetrics(rows)
+        : page?.detailType === "gate_in_out"
+          ? inOutMetrics(rows)
+          : page?.metrics;
+  const metric = pageMetrics?.find((m) => m.label === location.metric);
   const home =
     location.type === "org" &&
     location.name === role.home &&
@@ -136,6 +269,7 @@ export default function WorkspaceScreen() {
         type: next.type,
         name: next.name,
         tab: next.tab,
+        ...(peopleUsers && next.name === "People & Access" && next.tab === "Users" ? { userGroup: selectedPeopleGroup.value } : {}),
         ...(next.record ? { record: next.record } : {}),
         ...(next.metric ? { metric: next.metric } : {}),
       },
@@ -189,6 +323,7 @@ export default function WorkspaceScreen() {
   useEffect(() => {
     clear();
     setPreview("populated");
+    setClassSetup(undefined);
   }, [page?.id, app.workspace.scope]);
   const notifications = rows.filter((r) =>
     ["critical", "attention", "unavailable"].includes(r.state.tone),
@@ -544,12 +679,12 @@ export default function WorkspaceScreen() {
                         Source: {page.sources.map((s) => s.label).join(" · ")}
                       </Txt>
                     </Card>
-                  ) : (
+                  ) : !(pageMetrics ?? page.metrics).length ? null : (
                     <Metrics
                       metrics={
                         preview === "populated"
-                          ? page.metrics
-                          : page.metrics.map((m) => ({
+                          ? (pageMetrics ?? page.metrics)
+                          : (pageMetrics ?? page.metrics).map((m) => ({
                               ...m,
                               value: "—",
                               valuesByScope: undefined,
@@ -629,6 +764,20 @@ export default function WorkspaceScreen() {
                         action={() => setPreview("populated")}
                       />
                     </Card>
+                  ) : page.id === "ca-setup-setup" ? (
+                    <SetupView key={app.workspace.scope} notify={app.notify} />
+                  ) : page.id === "ca-setup-criteria" ? (
+                    <CriteriaView
+                      key={app.workspace.scope}
+                      notify={app.notify}
+                    />
+                  ) : page.id === "ca-setup-dashboard" ? (
+                    <DashboardView
+                      key={app.workspace.scope}
+                      rows={rows}
+                      cameras={sourceTabRows("Camera Setup")}
+                      clips={sourceTabRows("Video Analytics")}
+                    />
                   ) : (
                     <View
                       style={{
@@ -645,33 +794,83 @@ export default function WorkspaceScreen() {
                           gap: 12,
                         }}
                       >
-                        <Row
-                          style={{
-                            justifyContent: "space-between",
-                            flexWrap: "wrap",
-                            gap: 12,
-                          }}
-                        >
-                          <View style={{ flex: 1, minWidth: 160, gap: 4 }}>
-                            <Txt size={15} bold>
-                              {page.heading}
-                            </Txt>
-                            <Txt size={12} color={c.muted}>
-                              {role.label} · {app.workspace.scope}
-                            </Txt>
-                          </View>
-                          {page.primaryAction && (
-                            <Button
-                              compact
-                              label={page.primaryAction.label}
-                              icon="plus"
-                              variant="primary"
-                              onPress={() => runAction(page.primaryAction!)}
+                        {peopleUsers && (
+                          <Row style={{ gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                            <Txt size={13} bold>User directory</Txt>
+                            <Select
+                              label="User directory"
+                              value={selectedPeopleGroup.value}
+                              options={peopleGroups.map(({ value, label }) => ({ value, label }))}
+                              onChange={(userGroup) => {
+                                setQuery("");
+                                setFilters({});
+                                setClassSetup(undefined);
+                                router.setParams({ userGroup, record: "", metric: "" });
+                              }}
                             />
-                          )}
-                        </Row>
+                          </Row>
+                        )}
                         <Records
                           key={page.id}
+                          headingSubtitle={`${role.label} · ${app.workspace.scope}`}
+                          headingActions={
+                            classKinds.length > 0 ? (
+                              <Row style={{ flexWrap: "wrap", gap: 8 }}>
+                                {!(learnerManagement && location.type === "product" && location.name === "Class & Lab Attendance") && (
+                                <View style={{ flex: phone ? 1 : undefined }}>
+                                  <Button
+                                    compact={!phone}
+                                    label="Add"
+                                    icon="plus"
+                                    variant="primary"
+                                    onPress={() =>
+                                      setClassSetup({
+                                        kind: classKinds[0],
+                                        mode:
+                                          classKinds.length > 1
+                                            ? "choose-add"
+                                            : "add",
+                                      })
+                                    }
+                                  />
+                                </View>
+                                )}
+                                {!(learnerManagement && location.type === "product" && location.name === "Class & Lab Attendance") &&
+                                  !cameraManagement &&
+                                  !residenceManagement &&
+                                  !sourcesManagement && (
+                                    <View
+                                      style={{ flex: phone ? 1 : undefined }}
+                                    >
+                                      <Button
+                                        compact={!phone}
+                                        label="Bulk upload"
+                                        icon="folder"
+                                        onPress={() =>
+                                          setClassSetup({
+                                            kind: classKinds[0],
+                                            mode:
+                                              classKinds.length > 1
+                                                ? "choose-bulk"
+                                                : "bulk",
+                                          })
+                                        }
+                                      />
+                                    </View>
+                                  )}
+                              </Row>
+                            ) : (
+                              page.primaryAction && (
+                                <Button
+                                  compact
+                                  label={page.primaryAction.label}
+                                  icon="plus"
+                                  variant="primary"
+                                  onPress={() => runAction(page.primaryAction!)}
+                                />
+                              )
+                            )
+                          }
                           page={page}
                           rows={filtered}
                           query={query}
@@ -681,6 +880,41 @@ export default function WorkspaceScreen() {
                             setFilters((f) => ({ ...f, [id]: value }))
                           }
                           onOpen={openRecord}
+                          renderRowActions={
+                            gateAttendancePage
+                              ? (row) =>
+                                  row.cells.status === "Absent" ? (
+                                    <Button
+                                      compact
+                                      label="Mark attendance"
+                                      onPress={() => setMarkingId(row.id)}
+                                    />
+                                  ) : null
+                              : classKinds.length
+                                ? (row) =>
+                                    (residenceManagement &&
+                                      row.type === "leave" &&
+                                      !leaveEditable(row)) ||
+                                    (cameraManagement &&
+                                      ![
+                                        "camera",
+                                        "camera_source",
+                                        "gate_camera",
+                                      ].includes(row.type)) ? null : (
+                                      <IconButton
+                                        name="more"
+                                        label={`Actions for ${row.detail.title}`}
+                                        onPress={() =>
+                                          setClassSetup({
+                                            mode: "menu",
+                                            kind: kindOf(row, classKinds[0]),
+                                            recordId: row.id,
+                                          })
+                                        }
+                                      />
+                                    )
+                                : undefined
+                          }
                           onClear={clear}
                           onExport={() => {
                             setExportRecord(undefined);
@@ -776,6 +1010,49 @@ export default function WorkspaceScreen() {
             {app.toast}
           </Txt>
         </View>
+      )}
+      {markingId &&
+        rows.some(
+          (row) => row.id === markingId && row.cells.status === "Absent",
+        ) && (
+          <Dialog
+            title="Mark attendance"
+            onClose={() => setMarkingId(undefined)}
+          >
+            <MarkAttendanceForm
+              title={rows.find((row) => row.id === markingId)!.detail.title}
+              onCancel={() => setMarkingId(undefined)}
+              onSave={(marking) => {
+                const target = rows.find((row) => row.id === markingId);
+                if (!target || target.cells.status !== "Absent") return;
+                storeEditedRecord(
+                  classStoreKey,
+                  markedRecord(target, marking, app.name),
+                );
+                setMarkingId(undefined);
+                app.notify("Attendance marked for this session.");
+              }}
+            />
+          </Dialog>
+        )}
+      {classSetup && page && (
+        <SetupDialog
+          key={`${classStoreKey}:${app.workspace.scope}:${classSetup.mode}:${classSetup.kind}:${classSetup.recordId ?? "new"}`}
+          request={classSetup}
+          onRequest={setClassSetup}
+          page={page}
+          rows={rows}
+          workspace={app.workspace}
+          scopes={role.scopes}
+          actor={app.name}
+          storeKey={classStoreKey}
+          onClose={() => setClassSetup(undefined)}
+          onSaved={(message) => {
+            setClassSetup(undefined);
+            clear();
+            app.notify(message);
+          }}
+        />
       )}
       {!!modal && (
         <Dialog

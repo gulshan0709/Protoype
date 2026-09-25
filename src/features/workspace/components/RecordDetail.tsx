@@ -1,3 +1,6 @@
+import { userIdentity } from "../../../domain/contracts/userIdentity";
+import { UserIdentity } from "./UserIdentity";
+import { MediaPlayer } from "./RecordMedia";
 import React from "react";
 import { View } from "react-native";
 import type {
@@ -54,13 +57,20 @@ export function RecordDetail({
         <Button label="Back to records" icon="back" onPress={onBack} />
         <Badge label={record.state.label} tone={record.state.tone} />
       </Row>
+      {typeof record.captureAsset === "number" && (
+        <MediaPlayer record={record} />
+      )}
       <View style={{ gap: 8 }}>
         <Txt size={10} bold color={c.link} style={{ letterSpacing: 1.8 }}>
           {d.eyebrow.replaceAll("-", " ").replaceAll("_", " ").toUpperCase()}
         </Txt>
-        <Txt size={30} bold style={{ letterSpacing: -0.7 }}>
-          {d.title}
-        </Txt>
+        {userIdentity(record) ? (
+          <UserIdentity record={record} size={72} />
+        ) : (
+          <Txt size={30} bold style={{ letterSpacing: -0.7 }}>
+            {d.title}
+          </Txt>
+        )}
         <Txt color={c.muted}>{d.summary}</Txt>
       </View>
       <Row style={{ flexWrap: "wrap" }}>

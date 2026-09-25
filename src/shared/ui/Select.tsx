@@ -11,6 +11,7 @@ export function Select({
   onChange,
   icon,
   compact,
+  height,
 }: {
   label: string;
   value: string;
@@ -18,6 +19,7 @@ export function Select({
   onChange: (value: string) => void;
   icon?: string;
   compact?: boolean;
+  height?: number;
 }) {
   const [open, setOpen] = useState(false);
   const c = useTheme();
@@ -30,7 +32,7 @@ export function Select({
         onPress={() => setOpen(true)}
         style={{
           flexShrink: 1,
-          minHeight: compact ? 34 : 40,
+          minHeight: height ?? (compact ? 34 : 40),
           borderWidth: 1,
           borderColor: c.border,
           backgroundColor: c.actionSecondary,
