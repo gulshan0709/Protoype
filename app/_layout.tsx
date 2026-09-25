@@ -4,6 +4,8 @@ import { AppProvider } from "../src/application/AppProvider";
 import { useFonts } from "expo-font";
 import { MotionProvider } from "../src/shared/motion/MotionProvider";
 import { AppFrame } from "../src/application/AppFrame";
+import { AppLockProvider } from "../src/application/AppLockProvider";
+import { LockScreen } from "../src/features/lock/LockScreen";
 export default function Layout() {
   const [loaded, error] = useFonts({
     Inter: require("../assets/fonts/Inter-Regular.otf"),
@@ -14,7 +16,10 @@ export default function Layout() {
     <SafeAreaProvider>
       <MotionProvider>
         <AppProvider>
-          <AppFrame fontsReady={loaded || Boolean(error)} />
+          <AppLockProvider>
+            <AppFrame fontsReady={loaded || Boolean(error)} />
+            <LockScreen />
+          </AppLockProvider>
         </AppProvider>
       </MotionProvider>
     </SafeAreaProvider>

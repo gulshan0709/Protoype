@@ -401,7 +401,7 @@ export default function WorkspaceScreen() {
               borderBottomWidth: 1,
               borderColor: c.border,
               backgroundColor: c.surface,
-              gap: phone ? 6 : 15,
+              gap: phone ? 8 : 15,
             }}
           >
             <IconButton
@@ -410,7 +410,8 @@ export default function WorkspaceScreen() {
               onPress={() => (side ? setCollapsed(!collapsed) : open("menu"))}
             />
             {phone ? (
-              <BrandMark size={29} />
+              // Same 35 px tile and radius as the header icon buttons.
+              <BrandMark size={35} radius={9} markScale={0.72} />
             ) : (
               <Row style={{ flex: 1 }}>
                 <Txt size={12} color={c.muted}>
@@ -446,6 +447,8 @@ export default function WorkspaceScreen() {
             <View style={{ flex: phone ? 1 : undefined, minWidth: 0 }}>
               <Select
                 compact
+                height={35}
+                fill={phone}
                 label="Assigned scope"
                 value={app.workspace.scope}
                 options={role.scopes.map((value) => ({ value, label: value }))}
@@ -495,13 +498,12 @@ export default function WorkspaceScreen() {
               accessibilityLabel="Profile and settings"
               onPress={() => open("settings")}
               style={{
-                width: 34,
-                height: 34,
+                width: 35,
+                height: 35,
                 borderRadius: 18,
                 backgroundColor: c.actionPrimary,
                 justifyContent: "center",
                 alignItems: "center",
-                marginLeft: 3,
               }}
             >
               <Txt size={11} bold color={c.actionInk}>

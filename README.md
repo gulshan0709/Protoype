@@ -102,6 +102,52 @@ npm run build:native
 
 This command exports the iOS and Android JavaScript/Hermes bundles. It does **not** create signed APK/IPA packages or establish native device runtime coverage. Store credentials and signing are not configured. The new placeholder application identifier is `ai.vizenta.workspace`.
 
+### Android APK for sideloading
+
+`npx expo prebuild --platform android` generates the ignored `android/` project
+from `app.json`, including the navy launcher icon, adaptive icon and splash from
+`assets/app/`. Build with JDK 17 and the Android SDK:
+
+```powershell
+$env:JAVA_HOME = "$env:LOCALAPPDATA\Android\jdk17"
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+cd android; .\gradlew.bat assembleRelease
+```
+
+The APK is written to `android/app/build/outputs/apk/release/app-release.apk`.
+Setting `reactNativeArchitectures=armeabi-v7a,arm64-v8a` in
+`android/gradle.properties` covers physical phones and shortens the build.
+
+On Windows, gesture-handler codegen object paths exceed 260 characters.
+`plugins/withWindowsCmakePaths.js` lets CMake hash long object paths, but that
+only fits from a short root. Map the parent folder, for example
+`subst V: C:\Users\<you>\Desktop\vizenta`, and build from `V:\vizenta-ai\android`.
+Do not map the project folder itself to a drive root: Expo autolinking cannot
+find `package.json` at a drive root.
+
+The release build is signed with the generated debug keystore. It installs on
+any device that allows unknown apps, but it cannot be published to Play and a
+build signed with a different key cannot update it in place.
+
+## App lock
+
+Settings → App lock (Android and iOS) adds a 4-digit PIN, with optional face or
+fingerprint unlock when the device has one enrolled. The lock appears when a
+signed-in user returns after the chosen time away (immediately, 30 seconds,
+1 minute or 5 minutes; default 1 minute) and covers any open dialog. Android
+Back cannot dismiss it. Biometrics are offered automatically, and the PIN is
+always the fallback; the device passcode is not accepted.
+
+The PIN is stored only as a salted SHA-256 digest in the platform keystore via
+`expo-secure-store`, separately from the AsyncStorage preferences. Five wrong
+PINs start a 30-second wait that doubles with each further five, up to 15
+minutes, and survives restarts. **Forgot PIN? Sign out** removes the lock and
+returns to login. Changing the PIN or turning the lock off requires the current
+PIN; turning biometrics on first requires a successful scan. A fresh launch
+still opens login, so the lock applies only to returning to a signed-in session.
+On web, Settings explains that app lock is available in the mobile apps.
+Lock rules are unit tested in `tests/app-lock.test.cjs`.
+
 ## What is implemented
 
 Class and lab setup is available under **Class & Lab Attendance** for Customer

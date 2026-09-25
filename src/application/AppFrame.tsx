@@ -26,13 +26,17 @@ export function AppFrame({ fontsReady }: { fontsReady: boolean }) {
         accessibilityElementsHidden={launch}
         importantForAccessibility={launch ? "no-hide-descendants" : "auto"}
       >
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            animation: "none",
-            contentStyle: { backgroundColor: theme.background },
-          }}
-        />
+        {/* Android measures text once. Screens laid out before Inter loads keep
+            fallback-font widths, then clip their last word when Inter draws. */}
+        {fontsReady && (
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: "none",
+              contentStyle: { backgroundColor: theme.background },
+            }}
+          />
+        )}
       </View>
       {launch && (
         <LaunchScreen ready={fontsReady && ready} onDone={finish} overlay />

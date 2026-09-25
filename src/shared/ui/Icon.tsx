@@ -48,6 +48,10 @@ const paths: Record<string, string> = {
   filter: "M3 5h18M6 12h12M9 19h6",
   refresh: "M20 8A8 8 0 1 0 20 16M20 3v5h-5",
   lock: "M5 10h14v11H5ZM8 10V6a4 4 0 0 1 8 0v4",
+  fingerprint:
+    "M5 11a7 7 0 0 1 12.5-4.3M19 10.5V12c0 3-.6 5.6-1.8 8M8.5 20.5C9.5 18 10 15.5 10 12a2 2 0 0 1 4 0c0 3.8-.5 6.8-1.5 9.5M16 12.5c0 2.2-.3 4.2-.8 6M5 15c.6-1 1-2.3 1-3.5",
+  face: "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M9 9v1.5M15 9v1.5M12 9v4.5h-1M9.5 16.5c1.6 1 3.4 1 5 0",
+  backspace: "M9 5h11v14H9l-6-7ZM12 9l5 6M17 9l-5 6",
   activity: "M2 12h5l3-8 4 16 3-8h5",
   camera: "M3 7h13v12H3ZM16 10l5-3v12l-5-3",
   mail: "M3 5h18v14H3ZM3 5l9 8 9-8",
@@ -79,9 +83,19 @@ export const Icon = React.memo(function Icon({
     </Svg>
   );
 });
-export function BrandMark({ size = 34 }: { size?: number }) {
+export function BrandMark({
+  size = 34,
+  radius = 5,
+  markScale = 1,
+}: {
+  size?: number;
+  radius?: number;
+  /** Mark width as a fraction of the tile, for tiles beside other controls. */
+  markScale?: number;
+}) {
   const c = useTheme();
   const gradientId = `vizenta-mark-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const mark = size * markScale;
   return (
     <View
       accessibilityRole="image"
@@ -91,7 +105,7 @@ export function BrandMark({ size = 34 }: { size?: number }) {
         height: size,
         overflow: "hidden",
         backgroundColor: c.sidebar,
-        borderRadius: 5,
+        borderRadius: radius,
         justifyContent: "center",
         alignItems: "center",
         flexShrink: 0,
@@ -99,8 +113,8 @@ export function BrandMark({ size = 34 }: { size?: number }) {
     >
       {/* Standalone paths from the reference brand favicon; no wordmark crop. */}
       <Svg
-        width={size}
-        height={(size * 193) / 271}
+        width={mark}
+        height={(mark * 193) / 271}
         viewBox="0 0 271 193"
         fill="none"
       >

@@ -6,9 +6,42 @@
     "version": "1.0.0",
     "orientation": "default",
     "userInterfaceStyle": "automatic",
-    "ios": { "supportsTablet": true, "bundleIdentifier": "ai.vizenta.workspace" },
-    "android": { "package": "ai.vizenta.workspace" },
-    "web": { "bundler": "metro", "output": "single", "name": "Vizenta AI" },
-    "plugins": ["expo-router", "expo-font"]
+    "icon": "./assets/app/icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ai.vizenta.workspace"
+    },
+    "android": {
+      "package": "ai.vizenta.workspace",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/app/adaptive-icon.png",
+        "backgroundColor": "#0d385d"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "Vizenta AI"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Vizenta AI to unlock the app with Face ID."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/app/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#0d385d"
+        }
+      ],
+      "./plugins/withWindowsCmakePaths"
+    ]
   }
 }

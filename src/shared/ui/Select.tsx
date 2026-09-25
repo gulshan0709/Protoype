@@ -12,6 +12,7 @@ export function Select({
   icon,
   compact,
   height,
+  fill = false,
 }: {
   label: string;
   value: string;
@@ -20,6 +21,8 @@ export function Select({
   icon?: string;
   compact?: boolean;
   height?: number;
+  /** Push the chevron to the trailing edge when the select is stretched. */
+  fill?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const c = useTheme();
@@ -46,7 +49,7 @@ export function Select({
           <Txt
             size={compact ? 11 : 12}
             color={c.actionInk}
-            style={{ flexShrink: 1 }}
+            style={fill ? { flex: 1 } : { flexShrink: 1 }}
             lines={1}
           >
             {current}

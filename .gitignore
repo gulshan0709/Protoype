@@ -6,3 +6,5 @@ dist-pages/
 qa/
 *.log
 .env*
+/android/
+/ios/

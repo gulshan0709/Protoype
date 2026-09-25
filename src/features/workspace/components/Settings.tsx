@@ -4,6 +4,7 @@ import { useApp } from "../../../application/AppProvider";
 import { useTheme } from "../../../shared/theme/Theme";
 import { Txt, Button, Field } from "../../../shared/ui/Primitives";
 import { Select } from "../../../shared/ui/Select";
+import { AppLockSettings } from "../../lock/AppLockSettings";
 export function Settings({
   onClose,
   onState,
@@ -50,6 +51,7 @@ export function Settings({
           onClose();
         }}
       />
+      <AppLockSettings />
       <View
         style={{ height: 1, backgroundColor: c.border, marginVertical: 6 }}
       />
