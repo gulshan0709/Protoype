@@ -23,7 +23,8 @@
     "test:motion": "node scripts/verify-motion.cjs",
     "test:coverage": "node scripts/verify-coverage.cjs",
     "preview": "node scripts/serve.cjs",
-    "format": "prettier --write \"app/**/*.tsx\" \"src/**/*.ts\" \"src/**/*.tsx\" \"scripts/*.cjs\" \"tests/*.cjs\""
+    "format": "prettier --write \"app/**/*.tsx\" \"src/**/*.ts\" \"src/**/*.tsx\" \"scripts/*.cjs\" \"tests/*.cjs\"",
+    "test:columns": "node scripts/verify-columns.cjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",

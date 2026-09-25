@@ -87,7 +87,7 @@ export function Assistant({
           <Button key={q} label={q} onPress={() => ask(q)} icon="sparkle" />
         ))}
       </View>
-      {answer && (
+      {!!answer && (
         <Card style={{ backgroundColor: c.hero, borderColor: c.grid, gap: 12 }}>
           <Txt size={13}>{answer}</Txt>
           <Txt size={10} color={c.muted}>

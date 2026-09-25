@@ -540,7 +540,7 @@ export default function WorkspaceScreen() {
                         {metric.denominator ??
                           "Related records are shown below. This list may not include every record used for the metric."}
                       </Txt>
-                      <Txt size={11} color={c.muted}>
+                      <Txt size={12} color={c.muted}>
                         Source: {page.sources.map((s) => s.label).join(" · ")}
                       </Txt>
                     </Card>
@@ -656,7 +656,7 @@ export default function WorkspaceScreen() {
                             <Txt size={15} bold>
                               {page.heading}
                             </Txt>
-                            <Txt size={11} color={c.muted}>
+                            <Txt size={12} color={c.muted}>
                               {role.label} · {app.workspace.scope}
                             </Txt>
                           </View>
@@ -820,7 +820,7 @@ export default function WorkspaceScreen() {
                 onChange={setSearch}
                 placeholder="Try a campus, person, incident or reference…"
               />
-              <Txt size={11} color={c.muted}>
+              <Txt size={12} color={c.muted}>
                 Results are limited to {role.label} · {app.workspace.scope}.
               </Txt>
               {search.length < 2 ? (
@@ -847,7 +847,7 @@ export default function WorkspaceScreen() {
                     <Txt size={13} bold>
                       {hit.record.detail.title}
                     </Txt>
-                    <Txt size={11} color={c.muted}>
+                    <Txt size={12} color={c.muted}>
                       {hit.location.name} / {hit.location.tab}
                     </Txt>
                     <Badge

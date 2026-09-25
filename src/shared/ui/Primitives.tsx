@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Text,
   View,
   Pressable,
   TextInput,
   StyleSheet,
+  Platform,
   type TextStyle,
   type ViewStyle,
   type StyleProp,
@@ -27,9 +28,35 @@ export function Txt({
   lines?: number;
 }) {
   const c = useTheme();
+  const textRef = useRef<Text>(null);
+  const fullText =
+    typeof children === "string" || typeof children === "number"
+      ? String(children)
+      : undefined;
+  useEffect(() => {
+    if (Platform.OS !== "web" || !lines || fullText === undefined) return;
+    const element = textRef.current as unknown as HTMLElement | null;
+    if (!element) return;
+    const measure = () => {
+      const clipped =
+        element.scrollWidth > element.clientWidth + 1 ||
+        element.scrollHeight > element.clientHeight + 1;
+      if (clipped) element.setAttribute("title", fullText);
+      else element.removeAttribute("title");
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      element.removeAttribute("title");
+    };
+  }, [fullText, lines]);
   return (
     <Text
+      ref={textRef}
       numberOfLines={lines}
+      ellipsizeMode="tail"
       style={[
         {
           color: color ?? c.text,
@@ -37,6 +64,7 @@ export function Txt({
           fontSize: size,
           lineHeight: size * 1.5,
         },
+        lines ? { minWidth: 0, flexShrink: 1 } : undefined,
         style,
       ]}
     >
@@ -140,7 +168,7 @@ export function Button({
         },
       ]}
     >
-      {icon && <Icon name={icon} size={17} color={color} />}
+      {!!icon && <Icon name={icon} size={17} color={color} />}
       <Txt size={12} bold color={color}>
         {label}
       </Txt>
@@ -196,7 +224,8 @@ export function Badge({
     <View style={[s.badge, { backgroundColor: c.primarySoft }]}>
       <View style={[s.dot, { backgroundColor: colors.color }]} />
       <Txt
-        size={10}
+        size={11}
+        lines={1}
         color={
           ["healthy", "complete", "neutral"].includes(tone)
             ? c.text
@@ -230,7 +259,7 @@ export function Field({
   const c = useTheme();
   return (
     <View style={{ gap: 7, flexShrink: 1 }}>
-      {label && (
+      {!!label && (
         <Txt size={12} bold>
           {label}
         </Txt>
@@ -255,7 +284,7 @@ export function Field({
           },
         ]}
       />
-      {error && (
+      {!!error && (
         <Txt size={12} color={c.critical}>
           {error}
         </Txt>
@@ -298,10 +327,12 @@ export function SectionTitle({
   title,
   subtitle,
   trailing,
+  truncate = false,
 }: {
   title: string;
   subtitle?: string;
   trailing?: React.ReactNode;
+  truncate?: boolean;
 }) {
   const c = useTheme();
   return (
@@ -312,12 +343,12 @@ export function SectionTitle({
         gap: 12,
       }}
     >
-      <View style={{ flex: 1, gap: 4 }}>
-        <Txt size={15} bold>
+      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+        <Txt size={15} bold lines={truncate ? 1 : undefined}>
           {title}
         </Txt>
-        {subtitle && (
-          <Txt size={11} color={c.muted}>
+        {!!subtitle && (
+          <Txt size={12} color={c.muted} lines={truncate ? 1 : undefined}>
             {subtitle}
           </Txt>
         )}
@@ -348,12 +379,15 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
+    maxWidth: "100%",
+    minWidth: 0,
+    flexShrink: 1,
     gap: 5,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 99,
   },
-  dot: { width: 5, height: 5, borderRadius: 3 },
+  dot: { width: 5, height: 5, borderRadius: 3, flexShrink: 0 },
   input: {
     borderWidth: 1,
     borderRadius: 8,

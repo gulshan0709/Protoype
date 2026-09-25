@@ -40,7 +40,7 @@ export function Select({
         }}
       >
         <Row style={{ gap: 8 }}>
-          {icon && <Icon name={icon} size={16} color={c.actionInk} />}
+          {!!icon && <Icon name={icon} size={16} color={c.actionInk} />}
           <Txt
             size={compact ? 11 : 12}
             color={c.actionInk}

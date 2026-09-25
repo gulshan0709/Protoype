@@ -184,3 +184,57 @@ test("lifecycle transitions persist only within the exact persona and scope", ()
     "Source unavailable",
   );
 });
+
+const {
+  defaultColumnIds,
+  visibleColumnIds,
+  columnOptions,
+  RECORD_STATUS_COLUMN,
+} = require("../src/domain/contracts/columns.ts");
+test("record tables default to three key fields and one status across industries", () => {
+  for (const data of Object.values(contracts)) {
+    for (const role of Object.values(data.pages)) {
+      for (const branch of Object.values(role)) {
+        for (const tabs of Object.values(branch)) {
+          for (const page of Object.values(tabs)) {
+            for (const variant of [
+              page,
+              ...Object.values(page.variants ?? {}),
+            ]) {
+              const ids = defaultColumnIds(variant);
+              assert.ok(ids.length <= 4, variant.id);
+              assert.ok(ids.includes(variant.columns[0].id), variant.id);
+              assert.ok(ids.includes(RECORD_STATUS_COLUMN), variant.id);
+            }
+          }
+        }
+      }
+    }
+  }
+});
+test("coverage defaults keep identity, campus and camera coverage", () => {
+  const page =
+    contracts.education.pages.customer_admin.product["Class & Lab Attendance"]
+      .Coverage;
+  assert.deepEqual(defaultColumnIds(page), [
+    "space",
+    "campus",
+    "camera",
+    RECORD_STATUS_COLUMN,
+  ]);
+  assert.equal(
+    columnOptions(page).find((column) => column.id === "state").label,
+    "Source state",
+  );
+});
+test("column preferences preserve identity, permit hiding status and ignore stale fields", () => {
+  const page =
+    contracts.education.pages.customer_admin.product["Class & Lab Attendance"]
+      .Coverage;
+  assert.deepEqual(visibleColumnIds(page, ["policy", "removed-field"]), [
+    "space",
+    "policy",
+  ]);
+  assert.deepEqual(visibleColumnIds(page, []), ["space"]);
+  assert.deepEqual(visibleColumnIds(page, "invalid"), defaultColumnIds(page));
+});

@@ -18,7 +18,11 @@ export function ContextPanels({ page }: { page: PageContract }) {
       {page.sidePanels.map((panel) => (
         <Card key={panel.title} style={{ padding: 0, overflow: "hidden" }}>
           <View style={{ paddingVertical: 11, paddingHorizontal: 14 }}>
-            <SectionTitle title={panel.title} subtitle={panel.subtitle} />
+            <SectionTitle
+              title={panel.title}
+              subtitle={panel.subtitle}
+              truncate
+            />
           </View>
           {panel.items.map((item, i) => (
             <Row
@@ -31,12 +35,12 @@ export function ContextPanels({ page }: { page: PageContract }) {
                 alignItems: "flex-start",
               }}
             >
-              <View style={{ flex: 1, gap: 3 }}>
-                <Txt size={12} bold>
+              <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                <Txt size={12} bold lines={1}>
                   {item.label}
                 </Txt>
-                {item.meta && (
-                  <Txt size={10} color={c.muted}>
+                {!!item.meta && (
+                  <Txt size={11} color={c.muted} lines={1}>
                     {item.meta}
                   </Txt>
                 )}
@@ -53,6 +57,7 @@ export function ContextPanels({ page }: { page: PageContract }) {
           <SectionTitle
             title="Data and decision coverage"
             subtitle="Sources used by this page"
+            truncate
           />
         </View>
         {page.sources.map((source) => (
@@ -67,14 +72,14 @@ export function ContextPanels({ page }: { page: PageContract }) {
             }}
           >
             <Row style={{ alignItems: "flex-start" }}>
-              <Txt size={12} bold style={{ flex: 1 }}>
+              <Txt size={12} bold lines={1} style={{ flex: 1 }}>
                 {source.label}
               </Txt>
               <View style={{ maxWidth: "50%" }}>
                 <Badge label={source.value} tone={source.tone} />
               </View>
             </Row>
-            <Txt size={9} color={c.muted}>
+            <Txt size={11} color={c.muted} lines={1}>
               {source.impact}
             </Txt>
           </View>

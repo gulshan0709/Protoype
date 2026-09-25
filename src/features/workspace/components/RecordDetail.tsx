@@ -125,7 +125,7 @@ export function RecordDetail({
                       ) : (
                         <Txt size={12}>{cellText(item.value)}</Txt>
                       )}
-                      {item.meta && (
+                      {!!item.meta && (
                         <Txt size={10} color={c.subtle}>
                           {item.meta}
                         </Txt>

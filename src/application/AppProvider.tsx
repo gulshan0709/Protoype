@@ -26,6 +26,7 @@ interface Saved {
   name: string;
   audit: AuditEvent[];
   readNotifications: string[];
+  columnPreferences: Record<string, string[]>;
 }
 const initial: Saved = {
   workspace: defaultWorkspace,
@@ -35,12 +36,14 @@ const initial: Saved = {
   name: "Alex Morgan",
   audit: [],
   readNotifications: [],
+  columnPreferences: {},
 };
 const key = "vizenta-ai-demo-v1";
 interface AppContext extends Saved {
   ready: boolean;
   toast: string;
   update: (patch: Partial<Saved>) => void;
+  setColumnPreference: (key: string, ids: string[]) => void;
   notify: (text: string) => void;
   addAudit: (
     event: Omit<AuditEvent, "id" | "at" | "actor" | "workspace">,
@@ -67,6 +70,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             session: false,
             workspace: validWorkspace(parsed.workspace),
             audit: Array.isArray(parsed.audit) ? parsed.audit : [],
+            columnPreferences:
+              parsed.columnPreferences &&
+              typeof parsed.columnPreferences === "object" &&
+              !Array.isArray(parsed.columnPreferences)
+                ? parsed.columnPreferences
+                : {},
           });
         }
       })
@@ -105,6 +114,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     (patch: Partial<Saved>) => setSaved((s) => ({ ...s, ...patch })),
     [],
   );
+  const setColumnPreference = useCallback((key: string, ids: string[]) => {
+    setSaved((s) => ({
+      ...s,
+      columnPreferences: { ...s.columnPreferences, [key]: ids },
+    }));
+  }, []);
   const addAudit = useCallback(
     (event: Omit<AuditEvent, "id" | "at" | "actor" | "workspace">) => {
       setSaved((s) => ({
@@ -155,11 +170,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ready,
       toast,
       update,
+      setColumnPreference,
       notify: setToast,
       addAudit,
       exportRows,
     }),
-    [saved, ready, toast, update, addAudit, exportRows],
+    [saved, ready, toast, update, setColumnPreference, addAudit, exportRows],
   );
   const resolved = saved.theme === "system" ? system : saved.theme;
   return (

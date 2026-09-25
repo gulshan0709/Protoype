@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { View, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import type { PageContract, DataRecord } from "../../../domain/contracts/types";
 import { cellText, cellSecondary } from "../../../domain/contracts/logic";
@@ -14,6 +14,13 @@ import {
 } from "../../../shared/ui/Primitives";
 import { Icon } from "../../../shared/ui/Icon";
 import { Select } from "../../../shared/ui/Select";
+import { useApp } from "../../../application/AppProvider";
+import {
+  columnOptions,
+  visibleColumnIds,
+  RECORD_STATUS_COLUMN,
+} from "../../../domain/contracts/columns";
+import { ColumnPicker } from "./ColumnPicker";
 export function Records({
   page,
   rows,
@@ -36,29 +43,49 @@ export function Records({
   onExport: () => void;
 }) {
   const c = useTheme();
+  const app = useApp();
+  const preferenceKey = JSON.stringify([
+    app.workspace.industry,
+    app.workspace.role,
+    page.id,
+    page.columns.map((column) => column.id),
+  ]);
+  const selected = visibleColumnIds(page, app.columnPreferences[preferenceKey]);
+  const columns = columnOptions(page).filter(
+    (column) =>
+      column.id !== RECORD_STATUS_COLUMN && selected.includes(column.id),
+  );
+  const showStatus = selected.includes(RECORD_STATUS_COLUMN);
   const { width } = useWindowDimensions();
   const mobile = width < 768;
   const [sort, setSort] = useState({ key: "", asc: true });
   const [index, setIndex] = useState(0);
+  const activeSortKey = columns.some((column) => column.id === sort.key)
+    ? sort.key
+    : "";
+  useEffect(() => {
+    if (sort.key && !activeSortKey) setSort({ key: "", asc: true });
+  }, [sort.key, activeSortKey]);
   const sorted = useMemo(
     () =>
-      sort.key
+      activeSortKey
         ? [...rows].sort(
             (a, b) =>
-              cellText(a.cells[sort.key]).localeCompare(
-                cellText(b.cells[sort.key]),
+              cellText(a.cells[activeSortKey]).localeCompare(
+                cellText(b.cells[activeSortKey]),
                 undefined,
                 { numeric: true },
               ) * (sort.asc ? 1 : -1),
           )
         : rows,
-    [rows, sort],
+    [rows, activeSortKey, sort.asc],
   );
   const maxPage = Math.max(0, Math.ceil(sorted.length / 10) - 1);
   const current = Math.min(index, maxPage);
   const visible = sorted.slice(current * 10, current * 10 + 10);
   return (
     <View
+      testID="records-table"
       style={{
         backgroundColor: c.surface,
         borderColor: c.border,
@@ -77,9 +104,6 @@ export function Records({
               : "Workspace records"
           }
           subtitle={`${rows.length} records · assigned scope`}
-          trailing={
-            <Button compact label="Export" icon="download" onPress={onExport} />
-          }
         />
         <Row style={{ flexWrap: "wrap" }}>
           <View style={{ flexGrow: 1, flexBasis: 160 }}>
@@ -131,28 +155,38 @@ export function Records({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 7 }}
+          contentContainerStyle={{ flexGrow: 1, alignItems: "center", gap: 12 }}
         >
-          {page.filters
-            .filter((f) => f.id !== "state")
-            .map((f) => (
-              <Select
-                key={f.id}
-                compact
-                label={f.label}
-                value={filters[f.id] ?? ""}
-                options={[
-                  { label: f.label, value: "" },
-                  ...f.options.map((o) =>
-                    typeof o === "string" ? { label: o, value: o } : o,
-                  ),
-                ]}
-                onChange={(value) => onFilter(f.id, value)}
-              />
-            ))}
-          {(query || Object.values(filters).some(Boolean)) && (
-            <Button compact variant="ghost" label="Clear" onPress={onClear} />
-          )}
+          <Row style={{ flexGrow: 1, flexShrink: 0, gap: 7 }}>
+            {page.filters
+              .filter((f) => f.id !== "state")
+              .map((f) => (
+                <Select
+                  key={f.id}
+                  compact
+                  label={f.label}
+                  value={filters[f.id] ?? ""}
+                  options={[
+                    { label: f.label, value: "" },
+                    ...f.options.map((o) =>
+                      typeof o === "string" ? { label: o, value: o } : o,
+                    ),
+                  ]}
+                  onChange={(value) => onFilter(f.id, value)}
+                />
+              ))}
+            {(query || Object.values(filters).some(Boolean)) && (
+              <Button compact variant="ghost" label="Clear" onPress={onClear} />
+            )}
+          </Row>
+          <Row style={{ flexShrink: 0, gap: 8 }}>
+            <ColumnPicker
+              page={page}
+              selected={selected}
+              onChange={(ids) => app.setColumnPreference(preferenceKey, ids)}
+            />
+            <Button compact label="Export" icon="download" onPress={onExport} />
+          </Row>
         </ScrollView>
       </View>
       {!rows.length ? (
@@ -183,13 +217,15 @@ export function Records({
                 </Txt>
                 <Icon name="chevron" size={16} />
               </Row>
-              <Badge label={row.state.label} tone={row.state.tone} />
-              {page.columns.slice(1).map((col) => (
+              {showStatus && (
+                <Badge label={row.state.label} tone={row.state.tone} />
+              )}
+              {columns.slice(1).map((col) => (
                 <Row key={col.id} style={{ alignItems: "flex-start" }}>
-                  <Txt size={10} color={c.muted} style={{ flex: 1 }}>
+                  <Txt size={11} color={c.muted} style={{ flex: 1 }}>
                     {col.label}
                   </Txt>
-                  <Txt size={11} style={{ flex: 1, textAlign: "right" }}>
+                  <Txt size={12} style={{ flex: 1, textAlign: "right" }}>
                     {cellText(row.cells[col.id])}
                   </Txt>
                 </Row>
@@ -206,7 +242,10 @@ export function Records({
           <View
             style={{
               flex: 1,
-              minWidth: Math.max(610, page.columns.length * 135 + 150),
+              minWidth: Math.max(
+                360,
+                columns.length * 140 + (showStatus ? 116 : 0) + 39,
+              ),
             }}
           >
             <Row
@@ -219,7 +258,7 @@ export function Records({
                 borderColor: c.border,
               }}
             >
-              {page.columns.map((col, i) => (
+              {columns.map((col, i) => (
                 <Pressable
                   key={col.id}
                   accessibilityRole="button"
@@ -232,15 +271,17 @@ export function Records({
                   }
                   style={{ flex: i === 0 ? 1.35 : 1, paddingRight: 12 }}
                 >
-                  <Txt size={10} color={c.muted} bold>
+                  <Txt size={11} color={c.muted} bold>
                     {col.label.toUpperCase()}
                     {sort.key === col.id ? (sort.asc ? " ↑" : " ↓") : ""}
                   </Txt>
                 </Pressable>
               ))}
-              <Txt size={10} color={c.muted} bold style={{ width: 116 }}>
-                Status
-              </Txt>
+              {showStatus && (
+                <Txt size={11} color={c.muted} bold style={{ width: 116 }}>
+                  Status
+                </Txt>
+              )}
               <View style={{ width: 15 }} />
             </Row>
             {visible.map((row, i) => (
@@ -262,7 +303,7 @@ export function Records({
                   borderColor: c.border,
                 })}
               >
-                {page.columns.map((col, j) => (
+                {columns.map((col, j) => (
                   <View
                     key={col.id}
                     style={{
@@ -271,24 +312,26 @@ export function Records({
                       gap: 4,
                     }}
                   >
-                    <Txt size={11} bold={j === 0}>
+                    <Txt size={12} bold={j === 0}>
                       {cellText(row.cells[col.id])}
                     </Txt>
                     {!!cellSecondary(row.cells[col.id]) && (
-                      <Txt size={10} color={c.muted}>
+                      <Txt size={11} color={c.muted}>
                         {cellSecondary(row.cells[col.id])}
                       </Txt>
                     )}
                     {j === 0 && (
-                      <Txt size={9} color={c.subtle}>
+                      <Txt size={11} color={c.subtle}>
                         {row.type.replaceAll("-", " ").replaceAll("_", " ")}
                       </Txt>
                     )}
                   </View>
                 ))}
-                <View style={{ width: 116 }}>
-                  <Badge label={row.state.label} tone={row.state.tone} />
-                </View>
+                {showStatus && (
+                  <View style={{ width: 116 }}>
+                    <Badge label={row.state.label} tone={row.state.tone} />
+                  </View>
+                )}
                 <Icon name="chevron" size={15} />
               </Pressable>
             ))}
@@ -304,7 +347,7 @@ export function Records({
           justifyContent: "space-between",
         }}
       >
-        <Txt size={10} color={c.muted}>
+        <Txt size={11} color={c.muted}>
           {rows.length
             ? `${current * 10 + 1}–${Math.min(current * 10 + 10, rows.length)} of ${rows.length}`
             : "0 records"}
