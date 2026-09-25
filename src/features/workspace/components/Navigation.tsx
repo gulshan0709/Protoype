@@ -9,15 +9,26 @@ import type { Location } from "../../../domain/contracts/types";
 import { useTheme } from "../../../shared/theme/Theme";
 import { BrandMark, BrandWordmark, Icon } from "../../../shared/ui/Icon";
 import { Row, Txt } from "../../../shared/ui/Primitives";
+import { REF } from "./referenceUi";
 
 interface Props {
   location: Location;
   navigate: (type: "org" | "product", name: string) => void;
   open: (name: string) => void;
   collapsed?: boolean;
+  // Education v2 reference sidebar (Class & Lab Attendance).
+  reference?: boolean;
+  onCollapse?: () => void;
 }
 
-export function Navigation({ location, navigate, open, collapsed }: Props) {
+export function Navigation({
+  location,
+  navigate,
+  open,
+  collapsed,
+  reference,
+  onCollapse,
+}: Props) {
   const c = useTheme();
   const { workspace } = useApp();
   const industry = industries[workspace.industry];
@@ -43,15 +54,21 @@ export function Navigation({ location, navigate, open, collapsed }: Props) {
           paddingRight: 10,
           borderRadius: 8,
           borderLeftWidth: 3,
-          borderLeftColor: active ? c.sidebarAccent : "transparent",
+          borderLeftColor: active
+            ? reference
+              ? REF.navAccent
+              : c.sidebarAccent
+            : "transparent",
           flexDirection: "row",
           alignItems: "center",
           justifyContent: collapsed ? "center" : "flex-start",
           gap: 10,
           backgroundColor: active
-            ? pressed
-              ? c.actionPrimaryPressed
-              : c.actionPrimary
+            ? reference
+              ? REF.navActive
+              : pressed
+                ? c.actionPrimaryPressed
+                : c.actionPrimary
             : pressed || hovered
               ? c.sidebarHover
               : "transparent",
@@ -60,13 +77,13 @@ export function Navigation({ location, navigate, open, collapsed }: Props) {
         <Icon
           name={icon}
           size={16}
-          color={active ? c.actionInk : c.sidebarIcon}
+          color={active && !reference ? c.actionInk : c.sidebarIcon}
         />
         {!collapsed && (
           <Txt
             size={13}
             bold={active}
-            color={active ? c.actionInk : c.sidebarText}
+            color={active && !reference ? c.actionInk : c.sidebarText}
             style={{ flex: 1 }}
           >
             {name}
@@ -96,6 +113,26 @@ export function Navigation({ location, navigate, open, collapsed }: Props) {
         }}
       >
         {collapsed ? <BrandMark size={32} /> : <BrandWordmark />}
+        {reference && !collapsed && onCollapse && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Collapse navigation"
+            onPress={onCollapse}
+            style={{
+              marginLeft: "auto",
+              width: 35,
+              height: 35,
+              borderRadius: 9,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.15)",
+              backgroundColor: "rgba(255,255,255,0.08)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Icon name="panel" size={18} color="#d7ecf8" />
+          </Pressable>
+        )}
       </Row>
       <Pressable
         accessibilityRole="button"
@@ -125,9 +162,11 @@ export function Navigation({ location, navigate, open, collapsed }: Props) {
                 style={{ flex: 1, letterSpacing: 1.3 }}
               >
                 {role.label.toUpperCase()}
-                {"\n"}WORKSPACE
+                {reference ? " " : "\n"}WORKSPACE
               </Txt>
-              <Icon name="down" size={13} color={c.sidebarMuted} />
+              {!reference && (
+                <Icon name="down" size={13} color={c.sidebarMuted} />
+              )}
             </>
           )}
         </Row>
@@ -199,7 +238,7 @@ export function Navigation({ location, navigate, open, collapsed }: Props) {
         {role.organization.map((name) =>
           item(
             name,
-            /People|Access/.test(name)
+            /People|Access|Users/.test(name)
               ? "users"
               : /Sources|Health/.test(name)
                 ? "settings"
@@ -210,55 +249,57 @@ export function Navigation({ location, navigate, open, collapsed }: Props) {
           ),
         )}
       </ScrollView>
-      <View
-        style={{
-          borderTopWidth: 1,
-          borderColor: c.sidebarLine,
-          paddingTop: 10,
-          gap: 2,
-        }}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Ask Vizenta"
-          onPress={() => open("assistant")}
+      {!reference && (
+        <View
           style={{
-            minHeight: 39,
-            paddingHorizontal: 13,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: collapsed ? "center" : "flex-start",
-            gap: 10,
+            borderTopWidth: 1,
+            borderColor: c.sidebarLine,
+            paddingTop: 10,
+            gap: 2,
           }}
         >
-          <Icon name="sparkle" size={17} color={c.insights} />
-          {!collapsed && (
-            <Txt size={12} color={c.sidebarText}>
-              Ask Vizenta
-            </Txt>
-          )}
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Settings and preferences"
-          onPress={() => open("settings")}
-          style={{
-            minHeight: 39,
-            paddingHorizontal: 13,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: collapsed ? "center" : "flex-start",
-            gap: 10,
-          }}
-        >
-          <Icon name="settings" size={17} color={c.sidebarIcon} />
-          {!collapsed && (
-            <Txt size={12} color={c.sidebarText}>
-              Settings & preferences
-            </Txt>
-          )}
-        </Pressable>
-      </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ask Vizenta"
+            onPress={() => open("assistant")}
+            style={{
+              minHeight: 39,
+              paddingHorizontal: 13,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: collapsed ? "center" : "flex-start",
+              gap: 10,
+            }}
+          >
+            <Icon name="sparkle" size={17} color={c.insights} />
+            {!collapsed && (
+              <Txt size={12} color={c.sidebarText}>
+                Ask Vizenta
+              </Txt>
+            )}
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Settings and preferences"
+            onPress={() => open("settings")}
+            style={{
+              minHeight: 39,
+              paddingHorizontal: 13,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: collapsed ? "center" : "flex-start",
+              gap: 10,
+            }}
+          >
+            <Icon name="settings" size={17} color={c.sidebarIcon} />
+            {!collapsed && (
+              <Txt size={12} color={c.sidebarText}>
+                Settings & preferences
+              </Txt>
+            )}
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }

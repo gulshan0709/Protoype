@@ -47,6 +47,13 @@ const paths: Record<string, string> = {
   filter: "M3 5h18M6 12h12M9 19h6",
   refresh: "M20 8A8 8 0 1 0 20 16M20 3v5h-5",
   lock: "M5 10h14v11H5ZM8 10V6a4 4 0 0 1 8 0v4",
+  panel: "M3 3h18v18H3ZM9 3v18M14 9l3 3-3 3",
+  person:
+    "M8.5 8a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0M5 20c.7-4 3.1-6 7-6s6.3 2 7 6",
+  message:
+    "M21 12a8 8 0 0 1-8 8H6l-3 2 1.2-4A8.5 8.5 0 1 1 21 12ZM8 12h.01M12 12h.01M16 12h.01",
+  more: "M11 5a1 1 0 1 0 2 0a1 1 0 1 0-2 0M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M11 19a1 1 0 1 0 2 0a1 1 0 1 0-2 0",
+  eye: "M2.5 12c2.2-3.8 5.4-6 9.5-6s7.3 2.2 9.5 6c-2.2 3.8-5.4 6-9.5 6s-7.3-2.2-9.5-6ZM9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0",
   activity: "M2 12h5l3-8 4 16 3-8h5",
   camera: "M3 7h13v12H3ZM16 10l5-3v12l-5-3",
   mail: "M3 5h18v14H3ZM3 5l9 8 9-8",
@@ -72,7 +79,7 @@ export const Icon = React.memo(function Icon({
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {["help", "clock"].includes(name) && <Circle cx={12} cy={12} r={9} />}{" "}
+      {["help", "clock"].includes(name) && <Circle cx={12} cy={12} r={9} />}
       {name === "sun" && <Circle cx={12} cy={12} r={4} />}
       <Path d={paths[name] ?? paths.folder} />
     </Svg>

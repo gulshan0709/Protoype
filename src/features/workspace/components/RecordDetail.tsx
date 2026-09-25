@@ -1,5 +1,5 @@
-import React from "react";
-import { View } from "react-native";
+import React, { useState } from "react";
+import { View, Pressable } from "react-native";
 import type {
   Action,
   DataRecord,
@@ -17,23 +17,35 @@ import {
   SectionTitle,
 } from "../../../shared/ui/Primitives";
 import { Icon } from "../../../shared/ui/Icon";
+import { Dialog } from "../../../shared/ui/Dialog";
+import { RefButton } from "./referenceUi";
 export function RecordDetail({
   page,
   record,
   onAction,
   onBack,
+  backLabel = "Back to records",
+  onHome,
+  homeLabel,
   onNext,
   wide,
+  reference,
 }: {
   page: PageContract;
   record: DataRecord;
   onAction: (action: Action) => void;
   onBack: () => void;
+  backLabel?: string;
+  onHome?: () => void;
+  homeLabel?: string;
   onNext: () => void;
   wide: boolean;
+  // Education v2 reference detail layout.
+  reference?: boolean;
 }) {
   const c = useTheme();
   const { audit, workspace } = useApp();
+  const [related, setRelated] = useState(false);
   const d = record.localWorkflow
     ? {
         ...record.detail,
@@ -48,10 +60,284 @@ export function RecordDetail({
       e.workspace.role === workspace.role &&
       e.workspace.scope === workspace.scope,
   );
+  const timeline = [
+    ...events.map((e) => ({
+      time: new Date(e.at).toLocaleString(),
+      event: `${e.action} · ${e.reason}`,
+      actor: e.actor,
+    })),
+    ...d.timeline,
+  ];
+  if (reference) {
+    const LinkButton = ({
+      label,
+      onPress,
+    }: {
+      label: string;
+      onPress: () => void;
+    }) => (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={onPress}
+        style={({ hovered }: any) => ({
+          paddingVertical: 8,
+          paddingHorizontal: 12,
+          borderRadius: 7,
+          borderWidth: 1,
+          borderColor: c.border,
+          backgroundColor: hovered ? c.primarySoft : c.surface,
+        })}
+      >
+        <Txt size={12}>{label}</Txt>
+      </Pressable>
+    );
+    return (
+      <View style={{ gap: 14 }}>
+        <Row style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+          <Row style={{ flexWrap: "wrap", gap: 8 }}>
+            <LinkButton label={`← ${backLabel}`} onPress={onBack} />
+            {onHome && homeLabel && (
+              <LinkButton label={homeLabel} onPress={onHome} />
+            )}
+          </Row>
+          <LinkButton
+            label="Continue to related records →"
+            onPress={() => setRelated(true)}
+          />
+        </Row>
+        <Card
+          style={{
+            padding: 20,
+            flexDirection: wide ? "row" : "column",
+            gap: 20,
+          }}
+        >
+          <View style={{ flex: 1, gap: 10 }}>
+            <Txt size={9} bold color={c.link} style={{ letterSpacing: 1.4 }}>
+              {d.eyebrow
+                .replaceAll("-", " ")
+                .replaceAll("_", " ")
+                .toUpperCase()}
+            </Txt>
+            <Txt size={26} bold style={{ letterSpacing: -0.5 }}>
+              {d.title}
+            </Txt>
+            <Txt size={13} color={c.muted}>
+              {d.summary}
+            </Txt>
+            <Row style={{ flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+              {d.permittedActions.map((action, i) => (
+                <RefButton
+                  key={action.id}
+                  label={action.label}
+                  onPress={() => onAction(action)}
+                  kind={
+                    action.kind === "primary" || i === 0
+                      ? "primary"
+                      : action.kind === "export"
+                        ? "export"
+                        : "plain"
+                  }
+                />
+              ))}
+            </Row>
+          </View>
+          <View
+            style={{
+              width: wide ? "45%" : "100%",
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            {d.facts.map((fact, i) => (
+              <View
+                key={`${fact.label}-${i}`}
+                style={{
+                  flexGrow: 1,
+                  flexBasis: "45%",
+                  padding: 11,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  backgroundColor: c.background,
+                  gap: 3,
+                }}
+              >
+                <Txt size={10} color={c.muted}>
+                  {fact.label}
+                </Txt>
+                <Txt size={13} bold>
+                  {cellText(fact.value)}
+                </Txt>
+              </View>
+            ))}
+          </View>
+        </Card>
+        <View style={{ flexDirection: wide ? "row" : "column", gap: 14 }}>
+          <Card style={{ flex: wide ? 1.1 : undefined, padding: 0 }}>
+            {d.sections.map((section, i) => (
+              <View key={`${section.title}-${i}`} style={{ paddingTop: 14 }}>
+                <View style={{ paddingHorizontal: 14, paddingBottom: 8 }}>
+                  <Txt size={13} bold>
+                    {section.title}
+                  </Txt>
+                  {!!section.description && (
+                    <Txt size={10} color={c.muted}>
+                      {section.description}
+                    </Txt>
+                  )}
+                </View>
+                {section.items.map((item, j) => (
+                  <Row
+                    key={`${item.label}-${j}`}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      borderTopWidth: j === 0 ? 0 : 1,
+                      borderBottomWidth: j === section.items.length - 1 ? 1 : 0,
+                      borderColor: c.border,
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <Txt size={12} bold>
+                      {item.label}
+                    </Txt>
+                    <View style={{ alignItems: "flex-end", flexShrink: 1 }}>
+                      <Txt
+                        size={12}
+                        color={c.muted}
+                        style={{ textAlign: "right" }}
+                      >
+                        {cellText(item.value)}
+                      </Txt>
+                      {item.meta && (
+                        <Txt size={10} color={c.subtle}>
+                          {item.meta}
+                        </Txt>
+                      )}
+                    </View>
+                  </Row>
+                ))}
+              </View>
+            ))}
+          </Card>
+          <Card style={{ flex: wide ? 1 : undefined, padding: 0 }}>
+            <View
+              style={{
+                padding: 14,
+                borderBottomWidth: 1,
+                borderColor: c.border,
+              }}
+            >
+              <SectionTitle
+                title={
+                  timeline.length ? "Activity and audit" : "Data provenance"
+                }
+                subtitle={
+                  timeline.length
+                    ? "Stored events for this record"
+                    : "Sources supporting this detail"
+                }
+              />
+            </View>
+            <View style={{ padding: 14 }}>
+              {timeline.length
+                ? timeline.map((event, i) => (
+                    <Row
+                      key={i}
+                      style={{
+                        alignItems: "flex-start",
+                        paddingVertical: 12,
+                        borderBottomWidth: 1,
+                        borderColor: c.border,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: 4,
+                          marginTop: 6,
+                          backgroundColor: c.link,
+                        }}
+                      />
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Txt size={12} bold>
+                          {event.time}
+                        </Txt>
+                        <Txt size={11} color={c.muted}>
+                          {event.event}
+                        </Txt>
+                        {!!event.actor && (
+                          <Txt size={9} color={c.subtle}>
+                            {event.actor}
+                          </Txt>
+                        )}
+                      </View>
+                    </Row>
+                  ))
+                : page.sources.map((source) => (
+                    <Row
+                      key={source.label}
+                      style={{
+                        justifyContent: "space-between",
+                        paddingVertical: 10,
+                        borderBottomWidth: 1,
+                        borderColor: c.border,
+                      }}
+                    >
+                      <Txt size={12} bold>
+                        {source.label}
+                      </Txt>
+                      <Txt size={11} color={c.muted}>
+                        {source.value}
+                      </Txt>
+                    </Row>
+                  ))}
+            </View>
+          </Card>
+        </View>
+        {related && (
+          <Dialog title="Related records" onClose={() => setRelated(false)}>
+            {d.related?.length ? (
+              d.related.map((r, i) => (
+                <Row key={i} style={{ justifyContent: "space-between" }}>
+                  <Txt size={12} bold>
+                    {r.label}
+                  </Txt>
+                  <Txt size={12}>{cellText(r.value)}</Txt>
+                </Row>
+              ))
+            ) : (
+              <Txt size={12} color={c.muted}>
+                No additional related records are available in {workspace.scope}
+                . The navigation preserves the current detail and access
+                boundary.
+              </Txt>
+            )}
+            <Button
+              label="Next record"
+              icon="arrow"
+              onPress={() => {
+                setRelated(false);
+                onNext();
+              }}
+            />
+          </Dialog>
+        )}
+      </View>
+    );
+  }
   return (
     <View style={{ gap: 22 }}>
       <Row style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-        <Button label="Back to records" icon="back" onPress={onBack} />
+        <Row style={{ flexWrap: "wrap" }}>
+          <Button label={backLabel} icon="back" onPress={onBack} />
+          {onHome && homeLabel && <Button label={homeLabel} onPress={onHome} />}
+        </Row>
         <Badge label={record.state.label} tone={record.state.tone} />
       </Row>
       <View style={{ gap: 8 }}>
@@ -144,14 +430,7 @@ export function RecordDetail({
               subtitle="Source history and your actions"
             />
             <View style={{ gap: 22, marginTop: 23 }}>
-              {[
-                ...events.map((e) => ({
-                  time: new Date(e.at).toLocaleString(),
-                  event: `${e.action} · ${e.reason}`,
-                  actor: e.actor,
-                })),
-                ...d.timeline,
-              ].map((event, i) => (
+              {timeline.map((event, i) => (
                 <Row key={i} style={{ alignItems: "flex-start" }}>
                   <View style={{ paddingTop: 4 }}>
                     <Icon
