@@ -3,6 +3,8 @@ import corporate from "./data/corporate.json";
 import retail from "./data/retail.json";
 import manufacturing from "./data/manufacturing.json";
 import type { Industry, IndustryId, Workspace, Location } from "./types";
+import { extendEducation } from "./extensions";
+extendEducation(education as never);
 export const industries = {
   education,
   corporate,

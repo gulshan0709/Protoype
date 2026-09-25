@@ -11,6 +11,8 @@ export function Select({
   onChange,
   icon,
   compact,
+  field,
+  trigger,
 }: {
   label: string;
   value: string;
@@ -18,40 +20,49 @@ export function Select({
   onChange: (value: string) => void;
   icon?: string;
   compact?: boolean;
+  // Light bordered form control, used by the Education v2 reference layout.
+  field?: boolean;
+  // Custom trigger; receives the current label and an open callback.
+  trigger?: (current: string, open: () => void) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const c = useTheme();
   const current = options.find((o) => o.value === value)?.label ?? value;
+  const ink = field ? c.text : c.actionInk;
   return (
     <>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${label}: ${current}`}
-        onPress={() => setOpen(true)}
-        style={{
-          flexShrink: 1,
-          minHeight: compact ? 34 : 40,
-          borderWidth: 1,
-          borderColor: c.border,
-          backgroundColor: c.actionSecondary,
-          borderRadius: 9,
-          paddingHorizontal: 12,
-          justifyContent: "center",
-        }}
-      >
-        <Row style={{ gap: 8 }}>
-          {icon && <Icon name={icon} size={16} color={c.actionInk} />}
-          <Txt
-            size={compact ? 11 : 12}
-            color={c.actionInk}
-            style={{ flexShrink: 1 }}
-            lines={1}
-          >
-            {current}
-          </Txt>
-          <Icon name="down" size={14} color={c.actionInk} />
-        </Row>
-      </Pressable>
+      {trigger ? (
+        trigger(current, () => setOpen(true))
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${label}: ${current}`}
+          onPress={() => setOpen(true)}
+          style={{
+            flexShrink: 1,
+            minHeight: compact ? 34 : 40,
+            borderWidth: 1,
+            borderColor: c.border,
+            backgroundColor: field ? c.surface : c.actionSecondary,
+            borderRadius: 9,
+            paddingHorizontal: 12,
+            justifyContent: "center",
+          }}
+        >
+          <Row style={{ gap: 8 }}>
+            {icon && <Icon name={icon} size={16} color={ink} />}
+            <Txt
+              size={compact ? 11 : 12}
+              color={ink}
+              style={{ flexShrink: 1, flexGrow: field ? 1 : 0 }}
+              lines={1}
+            >
+              {current}
+            </Txt>
+            <Icon name="down" size={14} color={ink} />
+          </Row>
+        </Pressable>
+      )}
       {open && (
         <Dialog title={label} onClose={() => setOpen(false)}>
           {options.map((option) => (
