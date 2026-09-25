@@ -6,7 +6,7 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "../dist-pages");
 const output = path.resolve(__dirname, "../qa");
-const prefix = "/Protoype";
+const prefix = process.env.VIZENTA_WEB_BASE_URL ?? "/Protoype";
 const types = {
   ".html": "text/html",
   ".js": "text/javascript",

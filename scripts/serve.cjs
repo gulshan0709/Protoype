@@ -33,6 +33,14 @@ http
       fs.existsSync(file) && fs.statSync(file).isFile()
         ? file
         : path.join(root, "index.html");
+    // HTML and the deployment marker must never reuse a stale response.
+    // Expo's content-hashed assets can be cached safely across deployments.
+    response.setHeader(
+      "Cache-Control",
+      /[.-][a-f0-9]{32}\./i.test(path.basename(selected))
+        ? "public, max-age=31536000, immutable"
+        : "no-store",
+    );
     response.setHeader(
       "Content-Type",
       types[path.extname(selected)] ?? "application/octet-stream",
@@ -52,5 +60,7 @@ http
     stream.pipe(response);
   })
   .listen(Number(process.env.PORT || 8082), "127.0.0.1", () =>
-    console.log("Vizenta AI preview: http://localhost:8082"),
+    console.log(
+      `Vizenta AI preview: http://localhost:${process.env.PORT || 8082}`,
+    ),
   );

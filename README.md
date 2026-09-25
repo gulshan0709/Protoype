@@ -44,13 +44,34 @@ npm run build:pages
 npm run test:pages
 ```
 
-The Pages build uses `/Protoype` as its base path, adjusts
+The Pages build uses the current GitHub repository name as its base path (`/Protoype`
+by default locally, or override with `VIZENTA_WEB_BASE_URL`), adjusts
 the favicon URL, and includes HTML entry points for login, signup, and password
 recovery. Standard web and native builds keep their existing configuration.
 
 The legacy `npm run deploy` command publishes to the `gh-pages` branch and is only
 for repositories configured with **Deploy from a branch → gh-pages → / (root)**.
 Use the Actions workflow for the setup described above.
+
+## Browser updates and mobile refresh
+
+Build with `npm run build:web` or `npm run build:pages`; both emit a unique
+`version.json` matching the bundled app. The browser checks it without caching on
+launch, once a minute while visible, and when returning to the tab or going online.
+A newer deployment shows **New version available · Refresh**. Refresh uses a fresh
+document URL while preserving route parameters and saved preferences.
+
+On mobile web, pull down at the top of the page and release after **Release to
+refresh** appears. Short, horizontal, cancelled, and mid-scroll gestures do not
+reload; open dialogs and form controls are excluded. Refresh follows the existing
+full-reload behavior: the demo returns to login and in-memory edits reset.
+
+The preview server prevents caching HTML/version files and caches only hashed assets
+long term. For other hosts, configure HTML and `version.json` to revalidate on every
+request; cache content-hashed assets as immutable. GitHub Pages controls its own
+cache headers, so the version check and fresh refresh URL handle updates there.
+An already-open build from before this fix needs one browser refresh to receive it.
+Run `npm run test:refresh` after a web build to verify touch and update behavior.
 
 ## Login and sign-up
 

@@ -516,6 +516,7 @@ export default function WorkspaceScreen() {
           </Row>
           <ScrollView
             ref={scroll}
+            testID="workspace-scroll"
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
               paddingVertical: phone ? 12 : 16,

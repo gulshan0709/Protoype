@@ -4,6 +4,7 @@ import { Stack } from "expo-router";
 import { useApp } from "./AppProvider";
 import { useTheme } from "../shared/theme/Theme";
 import { LaunchScreen } from "../shared/ui/LaunchScreen";
+import { WebRefresh } from "./WebRefresh";
 
 export function AppFrame({ fontsReady }: { fontsReady: boolean }) {
   const { ready } = useApp();
@@ -36,6 +37,7 @@ export function AppFrame({ fontsReady }: { fontsReady: boolean }) {
       {launch && (
         <LaunchScreen ready={fontsReady && ready} onDone={finish} overlay />
       )}
+      {!launch && <WebRefresh />}
     </View>
   );
 }

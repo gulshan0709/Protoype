@@ -1,29 +1,13 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const exportWeb = require("./export-web.cjs");
 
 const root = path.resolve(__dirname, "..");
 const output = path.join(root, "dist-pages");
-const baseUrl = "/Protoype";
-const cli = path.join(
-  path.dirname(require.resolve("expo/package.json")),
-  "bin/cli",
-);
-const build = spawnSync(
-  process.execPath,
-  [cli, "export", "--platform", "web", "--output-dir", output],
-  {
-    cwd: root,
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      NODE_ENV: "production",
-      VIZENTA_WEB_BASE_URL: baseUrl,
-    },
-  },
-);
-if (build.error) throw build.error;
-if (build.status !== 0) process.exit(build.status ?? 1);
+const baseUrl =
+  process.env.VIZENTA_WEB_BASE_URL ??
+  `/${process.env.GITHUB_REPOSITORY?.split("/")[1] || "Protoype"}`;
+exportWeb(output, baseUrl);
 
 const index = path.join(output, "index.html");
 const html = fs
