@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { Txt } from "../shared/ui/Primitives";
 import { useTheme } from "../shared/theme/Theme";
+import { RefreshIndicator } from "./RefreshIndicator.web";
 
 const buildId = process.env.EXPO_PUBLIC_VIZENTA_BUILD_ID;
 const baseUrl = process.env.EXPO_PUBLIC_VIZENTA_BASE_URL || "";
@@ -26,6 +27,18 @@ export function WebRefresh() {
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const reloadStarted = useRef(false);
+  const paintFrame = useRef(0);
+  const startRefresh = useCallback(() => {
+    if (reloadStarted.current) return;
+    reloadStarted.current = true;
+    setRefreshing(true);
+    // Let the loading state paint before navigation starts. No artificial delay.
+    paintFrame.current = requestAnimationFrame(() => {
+      paintFrame.current = requestAnimationFrame(refresh);
+    });
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(paintFrame.current), []);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -140,8 +153,7 @@ export function WebRefresh() {
       cancel();
       if (ready && !reloading) {
         reloading = true;
-        setRefreshing(true);
-        refresh();
+        startRefresh();
       }
     };
     document.addEventListener("touchstart", start, { passive: true });
@@ -154,9 +166,8 @@ export function WebRefresh() {
       document.removeEventListener("touchend", end);
       document.removeEventListener("touchcancel", cancel);
     };
-  }, []);
+  }, [startRefresh]);
 
-  if (!pull && !refreshing && !updateAvailable) return null;
   return (
     <View
       pointerEvents="box-none"
@@ -169,36 +180,17 @@ export function WebRefresh() {
         alignItems: "center",
       }}
     >
-      {pull > 0 || refreshing ? (
-        <View
-          testID="pull-refresh-status"
-          pointerEvents="none"
-          accessibilityLiveRegion="polite"
-          style={{
-            backgroundColor: theme.surface,
-            borderColor: theme.border,
-            borderWidth: 1,
-            borderRadius: 22,
-            padding: 14,
-          }}
-        >
-          <Txt>
-            {refreshing
-              ? "Refreshing…"
-              : pull >= 90
-                ? "Release to refresh"
-                : "Pull to refresh"}
-          </Txt>
-        </View>
-      ) : (
+      <RefreshIndicator pull={pull} refreshing={refreshing} />
+      {!pull && !refreshing && updateAvailable && (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="New version available. Refresh app"
-          onPress={refresh}
+          onPress={startRefresh}
           style={{
             backgroundColor: theme.actionPrimary,
             borderRadius: 12,
             padding: 14,
+            position: "absolute",
           }}
         >
           <Txt color={theme.actionInk}>New version available · Refresh</Txt>
