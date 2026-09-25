@@ -5,13 +5,15 @@ import {
   View,
   Pressable,
   Platform,
-  Linking,
   Animated,
+  StyleSheet,
 } from "react-native";
 import { Asset } from "expo-asset";
+import { useVideoPlayer, VideoView } from "expo-video";
 import type { DataRecord } from "../../../domain/contracts/types";
 import { Dialog } from "../../../shared/ui/Dialog";
-import { Button, Txt } from "../../../shared/ui/Primitives";
+import { Txt } from "../../../shared/ui/Primitives";
+import { Icon } from "../../../shared/ui/Icon";
 import { useTheme } from "../../../shared/theme/Theme";
 const captures = [
   require("../../../../assets/media/capture-1.jpg"),
@@ -50,25 +52,101 @@ export function MediaPlayer({ record }: { record: DataRecord }) {
       },
     });
   return (
-    <View style={{ gap: 12 }}>
-      {capture && (
-        <Image
-          accessibilityLabel={"Capture for " + record.detail.title}
-          source={capture}
-          resizeMode="contain"
-          style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 10 }}
-        />
-      )}
-      {uri && (
-        <Button
-          label="Open recording"
-          onPress={() => void Linking.openURL(uri)}
+    <View style={{ gap: 12, alignSelf: "stretch" }}>
+      {(capture || video) && (
+        <NativeMedia
+          key={record.id}
+          capture={capture}
+          video={video}
+          title={record.detail.title}
         />
       )}
       <Txt size={12} color={c.muted}>
         {record.detail.title}
       </Txt>
     </View>
+  );
+}
+function NativeMedia({
+  capture,
+  video,
+  title,
+}: {
+  capture?: number;
+  video?: number;
+  title: string;
+}) {
+  const [playing, setPlaying] = useState(false);
+  const size = capture ? Asset.fromModule(capture) : undefined;
+  const ratio = size?.width && size.height ? size.width / size.height : 4 / 3;
+  // Android gives bundled images their file size (640 x 480) as a default
+  // style, so an Image with width "100%" and aspectRatio widens to 640. Size
+  // this frame instead and fill it with the capture or player.
+  return (
+    <View
+      style={{
+        width: "100%",
+        aspectRatio: ratio,
+        borderRadius: 10,
+        overflow: "hidden",
+        backgroundColor: "#071c2c",
+      }}
+    >
+      {video && playing ? (
+        <NativeVideo source={video} title={title} />
+      ) : (
+        <>
+          {capture && (
+            <Image
+              accessibilityLabel={"Capture for " + title}
+              source={capture}
+              resizeMode="cover"
+              style={StyleSheet.absoluteFill}
+            />
+          )}
+          {video && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={"Play recording for " + title}
+              onPress={() => setPlaying(true)}
+              style={[
+                StyleSheet.absoluteFill,
+                { alignItems: "center", justifyContent: "center" },
+              ]}
+            >
+              <View
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 32,
+                  borderWidth: 2,
+                  borderColor: "rgba(255,255,255,0.9)",
+                  backgroundColor: "rgba(7,28,44,0.72)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Icon name="play" size={28} color="#fff" />
+              </View>
+            </Pressable>
+          )}
+        </>
+      )}
+    </View>
+  );
+}
+// Mounted only after Play so lists of cameras don't each create a player.
+function NativeVideo({ source, title }: { source: number; title: string }) {
+  const player = useVideoPlayer(source, (p) => p.play());
+  return (
+    <VideoView
+      player={player}
+      nativeControls
+      contentFit="contain"
+      surfaceType="textureView"
+      accessibilityLabel={"Recording for " + title}
+      style={StyleSheet.absoluteFill}
+    />
   );
 }
 function FaceCapture({ uri, size = 52 }: { uri: string; size?: number }) {
