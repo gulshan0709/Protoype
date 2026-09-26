@@ -42,6 +42,7 @@ const paths: Record<string, string> = {
   logout: "M9 3H3v18h6M8 12h13m-5-5 5 5-5 5",
   clock: "M12 7v6l4 2",
   plus: "M12 4v16M4 12h16",
+  minus: "M4 12h16",
   play: "m8 5 11 7-11 7Z",
   pause: "M8 5v14M16 5v14",
   sun: "M12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2",

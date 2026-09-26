@@ -6,6 +6,7 @@ const {
   csvFor,
   canAct,
   actionKind,
+  metricFacts,
 } = require("../src/domain/contracts/logic.ts");
 const { localRecord } = require("../src/domain/contracts/lifecycle.ts");
 const ids = ["education", "corporate", "retail", "manufacturing"];
@@ -237,4 +238,32 @@ test("column preferences preserve identity, permit hiding status and ignore stal
   ]);
   assert.deepEqual(visibleColumnIds(page, []), ["space"]);
   assert.deepEqual(visibleColumnIds(page, "invalid"), defaultColumnIds(page));
+});
+
+const pagesOf = (id) =>
+  Object.values(contracts[id].pages).flatMap((branches) =>
+    Object.values(branches).flatMap((destinations) =>
+      Object.values(destinations).flatMap((tabs) => Object.values(tabs)),
+    ),
+  );
+test("KPI details show the calculation and time window each contract supplies", () => {
+  let checked = 0;
+  for (const page of pagesOf("manufacturing"))
+    for (const metric of page.metrics) {
+      const facts = Object.fromEntries(
+        metricFacts(metric, page, "Plant 1").map((f) => [f.label, f.value]),
+      );
+      assert.equal(facts["Time window"], page.window);
+      assert.equal(facts.Calculation, metric.calculation);
+      assert.ok(facts.Calculation && facts["Time window"], page.id);
+      checked++;
+    }
+  assert.equal(checked, 672);
+  const page = pagesOf("education")[0];
+  assert.deepEqual(metricFacts(page.metrics[0], page, "North Campus"), [
+    { label: "Scope", value: "North Campus" },
+    { label: "Page", value: page.heading },
+    { label: "Time window", value: "Current page window" },
+    { label: "Calculation", value: "Defined by this page contract" },
+  ]);
 });

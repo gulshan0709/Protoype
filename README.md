@@ -87,6 +87,20 @@ The login slideshow has four bundled industry images: Corporate, Education (seat
 
 The app follows the testing reference's motion approach: a branded startup reveal, short page and auth-step entrances, and animated dialog panels. System reduced-motion preferences disable the movement. Navigation does not wait for animations, and form state is preserved. See [shared motion](src/shared/motion/README.md); run `npm run test:motion` for launch, navigation, dialog, and accessibility checks.
 
+## Priority layer
+
+This follows the development package's 22 September priority update. Each of the 29 personas has a mission, defined in `src/domain/contracts/priority.ts`: Security Response, Presence & Automation, Combined Operations or Platform Administration. InfoSec/Audit uses Governance & Evidence.
+
+- A small mission label sits above each page title.
+- List pages open with a slim focus bar: the mission headline and description, how many records in the view need action, and a Next button that opens the most urgent one (critical first). Customer Admin sees two readiness lanes instead, Security readiness and Presence & integration, each opening its highest blocker.
+- One KPI leads: the first critical one, otherwise the first needing attention, otherwise the first. It moves to the front, gets a "Priority ·" prefix and the mission accent, and spans the first row on phones.
+- Security personas, except the Warden, see Safety products before Presence in the sidebar, Explore and search.
+- Evidence and source panels have a +/− toggle. They start collapsed for operators unless a page source needs attention. Customer Admin and Vizenta Admin see them open.
+- Record details open with a decision bar: current state, owner (or scope) and source confidence, with the record's actions beside them.
+- The workspace picker labels role selection as a design-review preview.
+
+The mission accents are theme tokens (`missionSecurity`, `missionAutomation`, `missionCombined`, `missionPlatform`) with light and dark values; see the [theme reference](src/shared/theme/README.md). `tests/priority.test.cjs` covers the profiles and rules.
+
 ## Native
 
 ```powershell
@@ -165,9 +179,10 @@ local app to check creation, upload, edit/delete, learners, scopes and mobile/da
 layouts; `VIZENTA_QA_URL` overrides the default `http://localhost:8083`.
 
 - Four industry workspaces; all 29 supplied roles; 752 base role/page contracts with Store/Warehouse variants. The supplied 894 review configurations can be traversed through the same application shell.
-- Persona-specific Organization navigation and entitled Presence, Safety and Insights products. Store location managers do not receive Guard navigation.
+- Persona-specific Organization navigation and entitled Presence, Safety and Insights products. Store location managers do not receive Guard navigation. Security personas see Safety before Presence (see [Priority layer](#priority-layer)).
 - Desktop sidebar, collapsible navigation, tablet/phone bottom navigation, phone record cards, responsive tables and full record detail pages.
 - Industry and demo-role switching, assigned-scope selection, native/web history navigation and direct links to tabs, records and KPI details.
+- KPI details show scope, page, time window and calculation, then Supporting data with each source's value, status and decision impact. Manufacturing contracts supply the window and calculation; other industries show "Current page window" and "Defined by this page contract".
 - Search across entitled, scoped pages; in-page search, status and contract filters, table sorting and pagination.
 - Record facts, source-impact panels, source history, permitted actions, required notes, owner entry for assignment and local audit history.
 - Local sample lifecycle transitions for acknowledge, assign, escalate, resolve and visitor checkout. Completed workflows hide further transition controls. Unavailable source states stay unavailable.
@@ -207,6 +222,10 @@ npm run test:coverage
 
 Browser checks use installed Google Chrome through Playwright. Outputs and screenshots are in [qa/](qa/). `VIZENTA_QA_URL` can point the checks at a different preview origin.
 
+### Table alignment
+
+Records tables build the header and every row from one set of column rules. Status and trailing action columns get one width for the whole table (the widest pill, up to 220 px, and the widest row action). Rows without an action leave that column empty, so their cells stay under the headers. All header labels are uppercase with the same style. With the app running, `npm run test:tables` opens representative tables at 1512, 1280, 1024 and 800 px and in the 390 px card layout. These include Gate → User Attendance (with pages that mix present and absent rows), Gate → In/Out, Class & Lab, Warden leave, People & Access, and a table from each other industry. For every visible row it checks that each cell's left edge is within 2 px of its header's, that cells don't overflow, that status pills aren't truncated and that headers match. It saves screenshots and `results.json` to `qa/tables/` and exits non-zero on a mismatch. Add `-- --all` to also crawl every tab for each industry's Customer Admin, and `--shots` to capture each of those tables.
+
 ## Service integration boundary
 
 This is an interactive frontend with fictional reference data and device-local persistence. No production authentication, backend, real camera feed, payroll connector, external notification delivery, or generative AI service is connected. Demo roles are deliberately selectable; a production identity service must supply access and enforce authorization server-side.
@@ -227,4 +246,6 @@ Customer Admin Sources & Setup includes module/notification/retention settings, 
 
 Demo data is completed by src/domain/contracts/demoData.ts after the reference contracts load. All four industries retain their operational scenarios. Education adds configured camera connections, shifts, warden contacts and hostel assignments, class rosters, surveillance contact details and matching camera recognitions. Setup opens with configured service, notification, retention and camera-quality values. The demo-data test checks every table (including retail variants), management form validity and cross-record assignments.
 
-In/Out, Gate User Attendance and Shield recognition views include profile/capture images. Shield Video Analytics and the Surveillance Dashboard play local H.264 recordings with standard controls; clicking a capture opens an image preview. On Android and iOS the capture shows a play button, and tapping it plays the clip in place through `expo-video` with native controls and fullscreen. A player is created only after Play, so camera lists stay light. Media behavior follows skillatracker-ui-demo; that project retrieves recordings from APIs, so the bundled footage uses OpenCV pedestrian clips (see assets/media/README.md). No streaming service is contacted.
+Demo volume. The reference pages ship three to nine rows, so src/domain/contracts/demoVolume.ts fills operational lists (people, attendance, movements, cases, cameras, exceptions) to 24–30 rows when a page is first opened. Each new row is derived from an authored row and keeps that row's state, detail story and actions. It changes its identity consistently across cells, detail and setup forms: people (same gender and naming style), IDs and room/lane/dock numbers, counts, event times, percentages and the assigned scope (rows are spread across the persona's campuses, stores or plants). Seeds are fixed, so reloads, deep links and audit keys see the same rows. Filterable codes (policy versions, scopes) never change. Templates are weighted towards healthy states and capped at their fair share, so exceptions stay the minority. Catalog tabs (reports, policies, rules, saved views) gain at most two rows. Structural lists (campuses, plants, hostels, customers) and one person's timetable stay as authored. Education's cross-linked setup pages (wardens/hostels, camera setup, surveillance users and recognitions, shifts) are also left as authored. Placeholder contacts are replaced everywhere: `@example.com` becomes the tenant domain, `98765…` phones become realistic mobile numbers and 192.0.2.x cameras move to 10.24.x.x. Retail wording copied from the Education reference ("Faculty", "Academic", "vendor 208 vendor") is corrected. Corporate pages replace the reference's generic one-row-per-site placeholders with authored rows from src/domain/contracts/corporate/rows-*.json (see corporateDemo.ts); each persona sees the rows inside its site, lobby, company, region or customer assignment. KPIs remain authored snapshots and are not recalculated from rows. `tests/demo-volume.test.cjs` checks counts, uniqueness, persona scopes, determinism, in-row consistency and setup-form validity.
+
+In/Out, Gate User Attendance and Shield recognition views include profile/capture images. Shield Video Analytics and the Surveillance Dashboard play local H.264 recordings with standard controls; clicking a capture opens an image preview. On Android and iOS the capture shows a play button, and tapping it plays the clip in place through `expo-video` with native controls and fullscreen. A player is created only after Play, so camera lists stay light. Media behavior follows skillatracker-ui-demo; that project retrieves recordings from APIs, so the app bundles HD demo footage and stills (see assets/media/README.md). Each person's capture is one of 15 HD stills, picked from their UID (else name), so a person shows the same still in the table, the preview and the record detail. Men and women (by first name, as for profile photos) get a still of a man or a woman. The whole frame is shown, with the detection box and label drawn over it in the classification colour; table thumbnails crop around the box. With the app running, `node scripts/verify-demo-media.cjs` checks this and saves `qa/media-*.png`. No streaming service is contacted.

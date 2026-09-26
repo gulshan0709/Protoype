@@ -5,6 +5,7 @@ import {
   industries,
   visibleProducts,
 } from "../../../domain/contracts/registry";
+import { familyOrder } from "../../../domain/contracts/priority";
 import type { Location } from "../../../domain/contracts/types";
 import { useTheme } from "../../../shared/theme/Theme";
 import { BrandMark, BrandWordmark, Icon } from "../../../shared/ui/Icon";
@@ -136,7 +137,7 @@ export function Navigation({ location, navigate, open, collapsed }: Props) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 14 }}
       >
-        {(["Presence", "Safety", "Insights"] as const).map((family) => {
+        {familyOrder(workspace.industry, workspace.role).map((family) => {
           const products = visibleProducts(workspace).filter(
             (p) => industry.core.productFamilies[p]?.family === family,
           );

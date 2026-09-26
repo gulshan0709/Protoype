@@ -47,7 +47,15 @@ import {
   scopedRecords,
   filterRecords,
   actionKind,
+  cellText,
+  metricFacts,
 } from "../../domain/contracts/logic";
+import {
+  actionQueue,
+  evidenceStartsCollapsed,
+  missionFor,
+  queueItems,
+} from "../../domain/contracts/priority";
 import { localRecord } from "../../domain/contracts/lifecycle";
 import type {
   Location,
@@ -55,7 +63,7 @@ import type {
   Action,
   Workspace,
 } from "../../domain/contracts/types";
-import { useTheme } from "../../shared/theme/Theme";
+import { missionColor, useTheme } from "../../shared/theme/Theme";
 import {
   Button,
   IconButton,
@@ -74,6 +82,7 @@ import { Navigation } from "./components/Navigation";
 import { Metrics } from "./components/Metrics";
 import { Records } from "./components/Records";
 import { ContextPanels } from "./components/ContextPanels";
+import { MissionBoard, MissionLabel } from "./components/Priority";
 import { RecordDetail } from "./components/RecordDetail";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { Assistant } from "./components/Assistant";
@@ -128,6 +137,7 @@ export default function WorkspaceScreen() {
   const scroll = useRef<ScrollView>(null);
   const industry = industries[app.workspace.industry];
   const role = industry.core.roles[app.workspace.role];
+  const mission = missionFor(app.workspace.industry, app.workspace.role);
   const location: Location = params.name
     ? {
         type: params.type === "product" ? "product" : "org",
@@ -137,21 +147,45 @@ export default function WorkspaceScreen() {
         metric: params.metric,
       }
     : homeLocation(app.workspace);
-  const peopleUsers = app.workspace.industry === "education" &&
-    location.type === "org" && location.name === "People & Access" &&
-    location.tab === "Users" && ["customer_admin", "vizenta_admin"].includes(app.workspace.role);
+  const peopleUsers =
+    app.workspace.industry === "education" &&
+    location.type === "org" &&
+    location.name === "People & Access" &&
+    location.tab === "Users" &&
+    ["customer_admin", "vizenta_admin"].includes(app.workspace.role);
   const userPages = industry.pages[app.workspace.role];
   const peopleGroups = [
-    { value: "learners", label: "Learners", page: userPages?.product["Class & Lab Attendance"]?.Learners },
-    { value: "surveillance", label: "Surveillance users", page: userPages?.org["Surveillance Users"]?.Users },
-    { value: "accounts", label: "Workspace users", page: getPage(app.workspace, location) },
+    {
+      value: "learners",
+      label: "Learners",
+      page: userPages?.product["Class & Lab Attendance"]?.Learners,
+    },
+    {
+      value: "surveillance",
+      label: "Surveillance users",
+      page: userPages?.org["Surveillance Users"]?.Users,
+    },
+    {
+      value: "accounts",
+      label: "Workspace users",
+      page: getPage(app.workspace, location),
+    },
   ].filter((group) => !!group.page);
-  const selectedPeopleGroup = peopleGroups.find((group) => group.value === params.userGroup) ?? peopleGroups[0];
-  const sourcePage = peopleUsers ? selectedPeopleGroup?.page : getPage(app.workspace, location);
-  const page = peopleUsers && sourcePage ? {
-    ...sourcePage,
-    columns: sourcePage.columns.map((column, index) => index === 0 ? { ...column, label: "User" } : column),
-  } : sourcePage;
+  const selectedPeopleGroup =
+    peopleGroups.find((group) => group.value === params.userGroup) ??
+    peopleGroups[0];
+  const sourcePage = peopleUsers
+    ? selectedPeopleGroup?.page
+    : getPage(app.workspace, location);
+  const page =
+    peopleUsers && sourcePage
+      ? {
+          ...sourcePage,
+          columns: sourcePage.columns.map((column, index) =>
+            index === 0 ? { ...column, label: "User" } : column,
+          ),
+        }
+      : sourcePage;
   const branch = getBranch(app.workspace, location.type, location.name);
   const learnerManagement = learnerSetupEnabled(app.workspace, page?.id);
   const cameraManagement = !!cameraSetupVariant(app.workspace, page?.id);
@@ -269,7 +303,11 @@ export default function WorkspaceScreen() {
         type: next.type,
         name: next.name,
         tab: next.tab,
-        ...(peopleUsers && next.name === "People & Access" && next.tab === "Users" ? { userGroup: selectedPeopleGroup.value } : {}),
+        ...(peopleUsers &&
+        next.name === "People & Access" &&
+        next.tab === "Users"
+          ? { userGroup: selectedPeopleGroup.value }
+          : {}),
         ...(next.record ? { record: next.record } : {}),
         ...(next.metric ? { metric: next.metric } : {}),
       },
@@ -364,6 +402,7 @@ export default function WorkspaceScreen() {
   if (!app.session) return <Login />;
   const exportRows = exportRecord ? [exportRecord] : filtered;
   const unavailable = preview !== "populated" && preview !== "degraded";
+  const queue = actionQueue(filtered);
   return (
     <View
       style={{
@@ -579,6 +618,7 @@ export default function WorkspaceScreen() {
                     }}
                   >
                     <View style={{ flex: 1, minWidth: 200, gap: 5 }}>
+                      <MissionLabel mission={mission} />
                       <Row style={{ flexWrap: "wrap" }}>
                         <Txt
                           size={phone ? 20 : 23}
@@ -659,29 +699,111 @@ export default function WorkspaceScreen() {
                       </ScrollView>
                     </View>
                   )}
+                  {!metric && !unavailable && (
+                    <MissionBoard
+                      mission={mission}
+                      scope={app.workspace.scope}
+                      count={queue.length}
+                      critical={queue.some((r) => r.state.tone === "critical")}
+                      next={
+                        queueItems(
+                          queue,
+                          page.columns.map((column) => column.id),
+                          cellText,
+                          1,
+                        )[0]
+                      }
+                      lanesFor={queue.length ? queue : filtered}
+                      metrics={pageMetrics ?? page.metrics}
+                      readinessLanes={app.workspace.role === "customer_admin"}
+                      onOpenRecord={openRecord}
+                    />
+                  )}
                   {metric ? (
-                    <Card style={{ gap: 15 }}>
-                      <Button
-                        label="Back to overview"
-                        icon="back"
-                        onPress={back}
-                      />
-                      <Txt size={45} bold color={c.link}>
-                        {metric.valuesByScope?.[app.workspace.scope] ??
-                          metric.value}
-                      </Txt>
-                      <Txt>
-                        {metric.contextsByScope?.[app.workspace.scope] ??
-                          metric.context}
-                      </Txt>
-                      <Txt size={12} color={c.muted}>
-                        {metric.denominator ??
-                          "Related records are shown below. This list may not include every record used for the metric."}
-                      </Txt>
-                      <Txt size={12} color={c.muted}>
-                        Source: {page.sources.map((s) => s.label).join(" · ")}
-                      </Txt>
-                    </Card>
+                    <>
+                      <Card style={{ gap: 15 }}>
+                        <Button
+                          label="Back to overview"
+                          icon="back"
+                          onPress={back}
+                        />
+                        <Txt size={45} bold color={c.link}>
+                          {metric.valuesByScope?.[app.workspace.scope] ??
+                            metric.value}
+                        </Txt>
+                        <Txt>
+                          {metric.contextsByScope?.[app.workspace.scope] ??
+                            metric.context}
+                        </Txt>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            gap: 18,
+                          }}
+                        >
+                          {metricFacts(metric, page, app.workspace.scope).map(
+                            (fact) => (
+                              <View
+                                key={fact.label}
+                                style={{
+                                  width: phone ? "100%" : "45%",
+                                  gap: 5,
+                                }}
+                              >
+                                <Txt size={11} color={c.muted}>
+                                  {fact.label}
+                                </Txt>
+                                <Txt size={13} bold>
+                                  {fact.value}
+                                </Txt>
+                              </View>
+                            ),
+                          )}
+                        </View>
+                        <Txt size={12} color={c.muted}>
+                          {metric.denominator ??
+                            "Related records are shown below. This list may not include every record used for the metric."}
+                        </Txt>
+                      </Card>
+                      <Card style={{ padding: 0, overflow: "hidden" }}>
+                        <View
+                          style={{ paddingVertical: 11, paddingHorizontal: 14 }}
+                        >
+                          <SectionTitle
+                            title="Supporting data"
+                            subtitle="Sources and decision impact for this value."
+                          />
+                        </View>
+                        {page.sources.map((source) => (
+                          <View
+                            key={source.label}
+                            style={{
+                              paddingVertical: 11,
+                              paddingHorizontal: 13,
+                              borderTopWidth: 1,
+                              borderColor: c.border,
+                              gap: 4,
+                            }}
+                          >
+                            <Row style={{ alignItems: "flex-start" }}>
+                              <Txt size={12} bold style={{ flex: 1 }}>
+                                {source.label}
+                              </Txt>
+                              <View style={{ maxWidth: "50%" }}>
+                                <Badge
+                                  label={source.value}
+                                  tone={source.tone}
+                                />
+                              </View>
+                            </Row>
+                            <Txt size={11} color={c.muted}>
+                              {source.impact}
+                            </Txt>
+                          </View>
+                        ))}
+                      </Card>
+                    </>
                   ) : !(pageMetrics ?? page.metrics).length ? null : (
                     <Metrics
                       metrics={
@@ -698,6 +820,7 @@ export default function WorkspaceScreen() {
                       }
                       scope={app.workspace.scope}
                       narrow={phone}
+                      accent={missionColor(c, mission.family)}
                       onPress={(m) => go({ ...location, metric: m.label })}
                     />
                   )}
@@ -798,17 +921,32 @@ export default function WorkspaceScreen() {
                         }}
                       >
                         {peopleUsers && (
-                          <Row style={{ gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-                            <Txt size={13} bold>User directory</Txt>
+                          <Row
+                            style={{
+                              gap: 12,
+                              flexWrap: "wrap",
+                              alignItems: "center",
+                            }}
+                          >
+                            <Txt size={13} bold>
+                              User directory
+                            </Txt>
                             <Select
                               label="User directory"
                               value={selectedPeopleGroup.value}
-                              options={peopleGroups.map(({ value, label }) => ({ value, label }))}
+                              options={peopleGroups.map(({ value, label }) => ({
+                                value,
+                                label,
+                              }))}
                               onChange={(userGroup) => {
                                 setQuery("");
                                 setFilters({});
                                 setClassSetup(undefined);
-                                router.setParams({ userGroup, record: "", metric: "" });
+                                router.setParams({
+                                  userGroup,
+                                  record: "",
+                                  metric: "",
+                                });
                               }}
                             />
                           </Row>
@@ -819,26 +957,34 @@ export default function WorkspaceScreen() {
                           headingActions={
                             classKinds.length > 0 ? (
                               <Row style={{ flexWrap: "wrap", gap: 8 }}>
-                                {!(learnerManagement && location.type === "product" && location.name === "Class & Lab Attendance") && (
-                                <View style={{ flex: phone ? 1 : undefined }}>
-                                  <Button
-                                    compact={!phone}
-                                    label="Add"
-                                    icon="plus"
-                                    variant="primary"
-                                    onPress={() =>
-                                      setClassSetup({
-                                        kind: classKinds[0],
-                                        mode:
-                                          classKinds.length > 1
-                                            ? "choose-add"
-                                            : "add",
-                                      })
-                                    }
-                                  />
-                                </View>
+                                {!(
+                                  learnerManagement &&
+                                  location.type === "product" &&
+                                  location.name === "Class & Lab Attendance"
+                                ) && (
+                                  <View style={{ flex: phone ? 1 : undefined }}>
+                                    <Button
+                                      compact={!phone}
+                                      label="Add"
+                                      icon="plus"
+                                      variant="primary"
+                                      onPress={() =>
+                                        setClassSetup({
+                                          kind: classKinds[0],
+                                          mode:
+                                            classKinds.length > 1
+                                              ? "choose-add"
+                                              : "add",
+                                        })
+                                      }
+                                    />
+                                  </View>
                                 )}
-                                {!(learnerManagement && location.type === "product" && location.name === "Class & Lab Attendance") &&
+                                {!(
+                                  learnerManagement &&
+                                  location.type === "product" &&
+                                  location.name === "Class & Lab Attendance"
+                                ) &&
                                   !cameraManagement &&
                                   !residenceManagement &&
                                   !sourcesManagement && (
@@ -926,7 +1072,13 @@ export default function WorkspaceScreen() {
                         />
                       </View>
                       <View style={{ width: wide ? 310 : "100%" }}>
-                        <ContextPanels page={page} />
+                        <ContextPanels
+                          page={page}
+                          evidenceCollapsed={evidenceStartsCollapsed(
+                            app.workspace.role,
+                            page.sources,
+                          )}
+                        />
                       </View>
                     </View>
                   )}

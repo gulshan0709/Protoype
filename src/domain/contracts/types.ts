@@ -68,6 +68,9 @@ export interface Metric {
   valuesByScope?: Record<string, string>;
   contextsByScope?: Record<string, string>;
   denominator?: string;
+  /** How the value is computed; supplied by the Manufacturing contracts. */
+  calculation?: string;
+  window?: string;
 }
 export interface PageContract {
   id: string;
@@ -75,6 +78,8 @@ export interface PageContract {
   description: string;
   detailType: string;
   recordLabel?: string;
+  /** Operating window the page's measures cover. */
+  window?: string;
   metrics: Metric[];
   columns: { id: string; label: string; type: string }[];
   filters: {

@@ -57,6 +57,11 @@ export const light = {
   chart: "#2cb7e8",
   grid: "#cbdce9",
   panelShadow: "0 10px 30px rgba(19,58,88,0.06)",
+  // Mission accents (22 September priority update), from the palette above.
+  missionSecurity: "#e15768",
+  missionAutomation: "#087ba8",
+  missionCombined: "#6956c7",
+  missionPlatform: "#5d7388",
 };
 export const dark: typeof light = {
   ...light,
@@ -82,6 +87,9 @@ export const dark: typeof light = {
   neutral: "#a5bbcd",
   neutralBg: "#173754",
   grid: "#315874",
+  missionAutomation: "#2cb7e8",
+  missionCombined: "#8f82ff",
+  missionPlatform: "#a5bbcd",
 };
 export type Colors = typeof light;
 export const ThemeContext = createContext(light);
@@ -104,4 +112,13 @@ export function toneColors(c: Colors, tone = "neutral") {
     color: c[key as keyof Colors],
     backgroundColor: c[`${key}Bg` as keyof Colors],
   };
+}
+export function missionColor(c: Colors, family: string) {
+  return family === "security"
+    ? c.missionSecurity
+    : family === "automation"
+      ? c.missionAutomation
+      : family === "platform"
+        ? c.missionPlatform
+        : c.missionCombined;
 }

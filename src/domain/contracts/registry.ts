@@ -6,6 +6,13 @@ import { gateAttendance } from "./gateExtension";
 import surveillanceSamples from "../surveillance/samples.json";
 import { surveillanceUsers } from "./surveillanceExtension";
 import { customerAdminLearners } from "./learnerExtension";
+import { familyOrder, orderByFamily } from "./priority";
+import { withDemoVolume, realisticContacts } from "./demoVolume";
+import { applyCorporateRows, type AuthoredRow } from "./corporateDemo";
+import corporateRows1 from "./corporate/rows-1.json";
+import corporateRows2 from "./corporate/rows-2.json";
+import corporateRows3 from "./corporate/rows-3.json";
+import corporateRows4 from "./corporate/rows-4.json";
 import education from "./data/education.json";
 import corporate from "./data/corporate.json";
 import retail from "./data/retail.json";
@@ -41,6 +48,21 @@ for (const [roleId, role] of Object.entries(industries.education.core.roles)) {
   }
 }
 
+applyCorporateRows(industries.corporate, {
+  ...corporateRows1,
+  ...corporateRows2,
+  ...corporateRows3,
+  ...corporateRows4,
+} as unknown as Record<string, AuthoredRow[]>);
+// Only these corpora carry placeholder contacts or copied wording (tests keep the others clean).
+realisticContacts(industries.education);
+realisticContacts(industries.retail);
+// People & Access reads learner pages directly, so fill them up front.
+for (const [roleId, areas] of Object.entries(industries.education.pages)) {
+  const learners = areas.product["Class & Lab Attendance"]?.Learners;
+  if (learners) withDemoVolume(learners, industries.education, roleId, "Learners");
+}
+
 const learnerTabs =
   industries.education.core.productTabs.customer_admin[
     "Class & Lab Attendance"
@@ -60,7 +82,8 @@ export function validWorkspace(candidate: Workspace): Workspace {
     : defaultWorkspace;
 }
 export function visibleProducts(w: Workspace) {
-  return industries[w.industry].core.roles[w.role].products.filter(
+  const core = industries[w.industry].core;
+  const products = core.roles[w.role].products.filter(
     (p) =>
       !(
         w.industry === "retail" &&
@@ -69,6 +92,11 @@ export function visibleProducts(w: Workspace) {
         p === "Guard"
       ),
   );
+  const order = familyOrder(w.industry, w.role);
+  // Search and other flat lists follow the same family order as navigation.
+  return order[0] === "Presence"
+    ? products
+    : orderByFamily(products, core.productFamilies, order);
 }
 export function homeLocation(w: Workspace): Location {
   const industry = industries[w.industry];
@@ -86,8 +114,16 @@ export function getBranch(w: Workspace, type: "org" | "product", name: string) {
 }
 export function getPage(w: Workspace, location: Location) {
   const base = getBranch(w, location.type, location.name)?.[location.tab];
-  return (
-    base?.variants?.[w.scope.startsWith("Store ") ? "store" : "warehouse"] ??
-    base
-  );
+  const variant = w.scope.startsWith("Store ") ? "store" : "warehouse";
+  const page = base?.variants?.[variant] ?? base;
+  // Demo rows are derived the first time a page is opened.
+  return page
+    ? withDemoVolume(
+        page,
+        industries[w.industry],
+        w.role,
+        location.tab,
+        base?.variants?.[variant] ? variant : undefined,
+      )
+    : page;
 }

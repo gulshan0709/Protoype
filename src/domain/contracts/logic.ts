@@ -1,6 +1,7 @@
 import type {
   Cell,
   DataRecord,
+  Metric,
   PageContract,
   Action,
   Workspace,
@@ -10,6 +11,21 @@ export function cellText(value: Cell | undefined): string {
   return typeof value === "object"
     ? String(value.primary ?? value.label ?? value.value ?? "—")
     : String(value);
+}
+/** KPI detail facts; contracts without a window or calculation fall back. */
+export function metricFacts(metric: Metric, page: PageContract, scope: string) {
+  return [
+    { label: "Scope", value: scope },
+    { label: "Page", value: page.heading },
+    {
+      label: "Time window",
+      value: metric.window ?? page.window ?? "Current page window",
+    },
+    {
+      label: "Calculation",
+      value: metric.calculation ?? "Defined by this page contract",
+    },
+  ];
 }
 export function cellSecondary(value: Cell): string {
   return typeof value === "object" ? (value.secondary ?? value.meta ?? "") : "";

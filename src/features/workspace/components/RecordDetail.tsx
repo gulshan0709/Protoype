@@ -1,6 +1,8 @@
 import { userIdentity } from "../../../domain/contracts/userIdentity";
 import { UserIdentity } from "./UserIdentity";
 import { MediaPlayer } from "./RecordMedia";
+import { DecisionBar } from "./Priority";
+import { missionFor } from "../../../domain/contracts/priority";
 import React from "react";
 import { View } from "react-native";
 import type {
@@ -73,7 +75,12 @@ export function RecordDetail({
         )}
         <Txt color={c.muted}>{d.summary}</Txt>
       </View>
-      <Row style={{ flexWrap: "wrap" }}>
+      <DecisionBar
+        mission={missionFor(workspace.industry, workspace.role)}
+        record={{ ...record, detail: d }}
+        page={page}
+        scope={workspace.scope}
+      >
         {d.permittedActions.map((action, i) => (
           <Button
             key={action.id}
@@ -83,7 +90,7 @@ export function RecordDetail({
             icon={action.kind === "export" ? "download" : undefined}
           />
         ))}
-      </Row>
+      </DecisionBar>
       <View style={{ flexDirection: wide ? "row" : "column", gap: 22 }}>
         <View style={{ flex: 1, gap: 20 }}>
           <Card>

@@ -1,3 +1,4 @@
+import { demoPortrait } from "../../../shared/ui/demoPortrait";
 import React, { useMemo, useState } from "react";
 import { Image, View } from "react-native";
 import { useTheme } from "../../../shared/theme/Theme";
@@ -110,7 +111,7 @@ export function UserForm({
           {!!form.image && (
             <Image
               accessibilityLabel="User image"
-              source={{ uri: form.image }}
+              source={demoPortrait(form.image)}
               style={{ width: 56, height: 56, borderRadius: 8 }}
             />
           )}

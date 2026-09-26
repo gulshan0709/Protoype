@@ -1,8 +1,14 @@
 import { userIdentity } from "../../../domain/contracts/userIdentity";
 import { RecordMedia } from "./RecordMedia";
 import { UserIdentity } from "./UserIdentity";
-import React, { useState, useMemo, useEffect } from "react";
-import { View, Pressable, ScrollView, useWindowDimensions } from "react-native";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import {
+  View,
+  Pressable,
+  ScrollView,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+} from "react-native";
 import type { PageContract, DataRecord } from "../../../domain/contracts/types";
 import { cellText, cellSecondary } from "../../../domain/contracts/logic";
 import { useTheme } from "../../../shared/theme/Theme";
@@ -24,6 +30,34 @@ import {
   RECORD_STATUS_COLUMN,
 } from "../../../domain/contracts/columns";
 import { ColumnPicker } from "./ColumnPicker";
+
+// Desktop table geometry. The header and every body row are built from these
+// same rules, so each cell starts exactly under its header whether or not the
+// row has a trailing action.
+const TABLE_PAD = 12;
+const TABLE_GAP = 10;
+const CHEVRON_WIDTH = 16;
+const STATUS_MIN = 116;
+const STATUS_MAX = 220;
+const ACTIONS_MIN = 35;
+const CAPTURE_ROW_HEIGHT = 74;
+const columnStyle = (index: number) => ({
+  flex: index === 0 ? 1.35 : 1,
+  minWidth: 0,
+  paddingRight: 12,
+});
+/** Width that grows to the widest reported content, between min and max. */
+function useFitWidth(min: number, max: number) {
+  const [width, setWidth] = useState(min);
+  const measure = useCallback(
+    (event: LayoutChangeEvent) => {
+      const next = Math.min(max, Math.ceil(event.nativeEvent.layout.width));
+      setWidth((current) => (next > current ? next : current));
+    },
+    [max],
+  );
+  return [width, measure] as const;
+}
 export function Records({
   page,
   rows,
@@ -102,6 +136,19 @@ export function Records({
   const maxPage = Math.max(0, Math.ceil(sorted.length / 10) - 1);
   const current = Math.min(index, maxPage);
   const visible = sorted.slice(current * 10, current * 10 + 10);
+  const actionFor = (row: DataRecord) => {
+    const action = renderRowActions?.(row);
+    return action === null || action === undefined || action === false
+      ? undefined
+      : action;
+  };
+  // One trailing actions column is reserved for the whole table as soon as
+  // any row has an action; rows without one leave it empty.
+  const firstAction = rows.find((row) => actionFor(row) !== undefined);
+  const hasActions = !!firstAction;
+  const [statusWidth, measureStatus] = useFitWidth(STATUS_MIN, STATUS_MAX);
+  const [actionsWidth, measureActions] = useFitWidth(ACTIONS_MIN, 320);
+  const hasCapture = columns.some((col) => col.id === "capture");
   const filterFields = (
     <>
       {page.filters
@@ -323,6 +370,7 @@ export function Records({
           {visible.map((row) => (
             <View key={row.id} style={{ gap: 6 }}>
               <Pressable
+                testID="records-card"
                 accessibilityRole={
                   columns.some((col) => col.id === "capture")
                     ? undefined
@@ -338,7 +386,7 @@ export function Records({
                   gap: 12,
                 }}
               >
-                <Row style={{ justifyContent: "space-between" }}>
+                <Row style={{ alignItems: "center", gap: 10 }}>
                   {userIdentity(row) ? (
                     <>
                       {columns.some((col) => col.id === "capture") ? (
@@ -354,7 +402,9 @@ export function Records({
                           <UserIdentity record={row} />
                         </Pressable>
                       ) : (
-                        <UserIdentity record={row} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <UserIdentity record={row} />
+                        </View>
                       )}
                     </>
                   ) : (
@@ -362,29 +412,47 @@ export function Records({
                       {cellText(row.cells[page.columns[0].id])}
                     </Txt>
                   )}
+                  {showStatus && (
+                    <Badge label={row.state.label} tone={row.state.tone} />
+                  )}
                   <Icon name="chevron" size={16} />
                 </Row>
-                {showStatus && (
-                  <Badge label={row.state.label} tone={row.state.tone} />
+                {columns.length > 1 && (
+                  // Label and value share one centred row, so media thumbnails
+                  // line up with their label like plain text values do.
+                  <View
+                    style={{
+                      gap: 10,
+                      paddingTop: 12,
+                      borderTopWidth: 1,
+                      borderTopColor: c.border,
+                    }}
+                  >
+                    {columns.slice(1).map((col) => (
+                      <Row key={col.id} style={{ alignItems: "center", gap: 12 }}>
+                        <Txt
+                          size={10}
+                          bold
+                          color={c.muted}
+                          style={{ flex: 1, letterSpacing: 0.6 }}
+                        >
+                          {col.label.toUpperCase()}
+                        </Txt>
+                        {col.id === "capture" ? (
+                          <RecordMedia record={row} />
+                        ) : (
+                          <Txt size={12} style={{ flex: 1.4, textAlign: "right" }}>
+                            {cellText(row.cells[col.id])}
+                          </Txt>
+                        )}
+                      </Row>
+                    ))}
+                  </View>
                 )}
-                {columns.slice(1).map((col) => (
-                  <Row key={col.id} style={{ alignItems: "flex-start" }}>
-                    <Txt size={11} color={c.muted} style={{ flex: 1 }}>
-                      {col.label}
-                    </Txt>
-                    {col.id === "capture" ? (
-                      <RecordMedia record={row} />
-                    ) : (
-                      <Txt size={12} style={{ flex: 1, textAlign: "right" }}>
-                        {cellText(row.cells[col.id])}
-                      </Txt>
-                    )}
-                  </Row>
-                ))}
               </Pressable>
-              {renderRowActions && (
+              {actionFor(row) !== undefined && (
                 <Row style={{ justifyContent: "flex-end" }}>
-                  {renderRowActions(row)}
+                  {actionFor(row)}
                 </Row>
               )}
             </View>
@@ -402,15 +470,42 @@ export function Records({
               minWidth: Math.max(
                 360,
                 columns.length * 140 +
-                  (showStatus ? 116 : 0) +
-                  39 +
-                  (renderRowActions ? 45 : 0),
+                  (showStatus ? statusWidth + TABLE_GAP : 0) +
+                  CHEVRON_WIDTH +
+                  TABLE_PAD * 2 +
+                  (hasActions ? actionsWidth + TABLE_GAP : 0),
               ),
             }}
           >
-            <Row
+            {firstAction && (
+              // Hidden copy of the table's first action, measured so the
+              // actions column has its width even on pages without actions.
+              <View
+                aria-hidden
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                pointerEvents="none"
+                onLayout={measureActions}
+                style={
+                  {
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    opacity: 0,
+                    visibility: "hidden",
+                  } as object
+                }
+              >
+                {actionFor(firstAction)}
+              </View>
+            )}
+            <View
+              testID="records-header"
               style={{
-                paddingHorizontal: 12,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: TABLE_GAP,
+                paddingHorizontal: TABLE_PAD,
                 minHeight: 35,
                 backgroundColor: c.primarySoft,
                 borderTopWidth: 1,
@@ -421,6 +516,7 @@ export function Records({
               {columns.map((col, i) => (
                 <Pressable
                   key={col.id}
+                  testID="records-head-cell"
                   accessibilityRole="button"
                   accessibilityLabel={`Sort by ${col.label}`}
                   onPress={() =>
@@ -429,7 +525,7 @@ export function Records({
                       asc: sort.key !== col.id || !sort.asc,
                     })
                   }
-                  style={{ flex: i === 0 ? 1.35 : 1, paddingRight: 12 }}
+                  style={columnStyle(i)}
                 >
                   <Txt size={11} color={c.muted} bold>
                     {col.label.toUpperCase()}
@@ -438,39 +534,53 @@ export function Records({
                 </Pressable>
               ))}
               {showStatus && (
-                <Txt size={11} color={c.muted} bold style={{ width: 116 }}>
-                  Status
-                </Txt>
+                <View
+                  testID="records-head-cell-status"
+                  style={{ width: statusWidth }}
+                >
+                  <Txt size={11} color={c.muted} bold>
+                    STATUS
+                  </Txt>
+                </View>
               )}
-              <View style={{ width: 15 }} />
-              {renderRowActions && <View style={{ width: 35 }} />}
-            </Row>
+              <View
+                testID="records-head-cell-chevron"
+                style={{ width: CHEVRON_WIDTH }}
+              />
+              {hasActions && (
+                <View
+                  testID="records-head-cell-actions"
+                  style={{ width: actionsWidth }}
+                />
+              )}
+            </View>
             {visible.map((row, i) => (
               <View
                 key={row.id}
+                testID="records-row"
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
+                  gap: TABLE_GAP,
+                  paddingRight: hasActions ? TABLE_PAD : 0,
                   borderBottomWidth: i < visible.length - 1 ? 1 : 0,
                   borderColor: c.border,
                 }}
               >
                 <Pressable
-                  accessibilityRole={
-                    columns.some((col) => col.id === "capture")
-                      ? undefined
-                      : "button"
-                  }
+                  accessibilityRole={hasCapture ? undefined : "button"}
                   accessibilityLabel={`Open ${row.detail.title}`}
                   onPress={() => onOpen(row)}
                   style={({ pressed, hovered }: any) => ({
                     flex: 1,
-                    paddingHorizontal: 12,
+                    minWidth: 0,
+                    paddingLeft: TABLE_PAD,
+                    paddingRight: hasActions ? 0 : TABLE_PAD,
                     paddingVertical: 11,
                     flexDirection: "row",
-                    gap: 10,
+                    gap: TABLE_GAP,
                     alignItems: "center",
-                    minHeight: 55,
+                    minHeight: hasCapture ? CAPTURE_ROW_HEIGHT : 55,
                     backgroundColor:
                       pressed || hovered ? c.primarySoft : c.surface,
                   })}
@@ -478,11 +588,8 @@ export function Records({
                   {columns.map((col, j) => (
                     <View
                       key={col.id}
-                      style={{
-                        flex: j === 0 ? 1.35 : 1,
-                        paddingRight: 12,
-                        gap: 4,
-                      }}
+                      testID="records-cell"
+                      style={[columnStyle(j), { gap: 4 }]}
                     >
                       {col.id === "capture" ? (
                         <RecordMedia record={row} />
@@ -527,15 +634,40 @@ export function Records({
                     </View>
                   ))}
                   {showStatus && (
-                    <View style={{ width: 116 }}>
-                      <Badge label={row.state.label} tone={row.state.tone} />
+                    <View
+                      testID="records-cell-status"
+                      style={{ width: statusWidth, flexDirection: "row" }}
+                    >
+                      {/* Sized by content so the column can fit the widest pill. */}
+                      <View
+                        onLayout={measureStatus}
+                        style={{ flexShrink: 0, maxWidth: STATUS_MAX }}
+                      >
+                        <Badge label={row.state.label} tone={row.state.tone} />
+                      </View>
                     </View>
                   )}
-                  <Icon name="chevron" size={15} />
+                  <View
+                    testID="records-cell-chevron"
+                    style={{ width: CHEVRON_WIDTH, alignItems: "center" }}
+                  >
+                    <Icon name="chevron" size={15} />
+                  </View>
                 </Pressable>
-                {renderRowActions && (
-                  <View style={{ paddingRight: 10 }}>
-                    {renderRowActions(row)}
+                {hasActions && (
+                  <View
+                    testID="records-cell-actions"
+                    style={{
+                      width: actionsWidth,
+                      flexDirection: "row",
+                      justifyContent: "flex-end",
+                    }}
+                  >
+                    {actionFor(row) !== undefined && (
+                      <View onLayout={measureActions} style={{ flexShrink: 0 }}>
+                        {actionFor(row)}
+                      </View>
+                    )}
                   </View>
                 )}
               </View>

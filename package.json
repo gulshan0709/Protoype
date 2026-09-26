@@ -15,7 +15,7 @@
     "build:native": "expo export --platform ios --platform android --output-dir dist-native",
     "typecheck": "tsc --noEmit",
     "contracts:import": "node scripts/import-contracts.cjs",
-    "test": "node --test tests/contracts.test.cjs tests/class-setup.test.cjs tests/learner-setup.test.cjs tests/camera-setup.test.cjs tests/surveillance-setup.test.cjs tests/gate-attendance.test.cjs tests/demo-data.test.cjs tests/app-lock.test.cjs",
+    "test": "node --test tests/contracts.test.cjs tests/class-setup.test.cjs tests/learner-setup.test.cjs tests/camera-setup.test.cjs tests/surveillance-setup.test.cjs tests/gate-attendance.test.cjs tests/demo-data.test.cjs tests/app-lock.test.cjs tests/priority.test.cjs tests/demo-volume.test.cjs tests/detection-demo.test.cjs",
     "test:ui": "node scripts/verify-ui.cjs",
     "test:auth": "node scripts/verify-auth.cjs",
     "test:pages": "node scripts/verify-pages.cjs",
@@ -26,6 +26,7 @@
     "preview": "node scripts/serve.cjs",
     "format": "prettier --write \"app/**/*.tsx\" \"src/**/*.ts\" \"src/**/*.tsx\" \"scripts/*.cjs\" \"tests/*.cjs\"",
     "test:columns": "node scripts/verify-columns.cjs",
+    "test:tables": "node scripts/verify-table-alignment.cjs",
     "test:class-setup": "node scripts/verify-class-setup.cjs"
   },
   "dependencies": {

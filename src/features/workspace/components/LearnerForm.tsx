@@ -1,3 +1,4 @@
+import { demoPortrait } from "../../../shared/ui/demoPortrait";
 import React, { useMemo, useState } from "react";
 import { Image, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -114,7 +115,7 @@ export function AddLearnerForm({
           {!!form.image && (
             <Image
               accessibilityLabel="Learner image"
-              source={{ uri: form.image }}
+              source={demoPortrait(form.image)}
               style={{ width: 56, height: 56, borderRadius: 8 }}
             />
           )}

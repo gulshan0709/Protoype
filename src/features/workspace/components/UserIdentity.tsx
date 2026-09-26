@@ -1,3 +1,4 @@
+import { demoPortrait } from "../../../shared/ui/demoPortrait";
 import { userIdentity } from "../../../domain/contracts/userIdentity";
 import React, { useState } from "react";
 import { Image, View } from "react-native";
@@ -33,7 +34,7 @@ export function UserIdentity({ record, size = 38 }: { record: DataRecord; size?:
         {user.image && !failed ? (
           <Image
             key={user.image}
-            source={{ uri: user.image }}
+            source={demoPortrait(user.image, name)}
             accessibilityLabel={name + " profile image"}
             onError={() => setFailed(true)}
             style={{ width: size, height: size }}

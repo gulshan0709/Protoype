@@ -57,11 +57,11 @@
                     "Plant South"
                 ],
                 "products": [
-                    "Gate",
-                    "Zones",
                     "Shield",
                     "Guard",
                     "Visitor",
+                    "Zones",
+                    "Gate",
                     "AI Analytics"
                 ],
                 "organization": [
@@ -78,10 +78,10 @@
                     "Plant North"
                 ],
                 "products": [
-                    "Gate",
-                    "Zones",
                     "Shield",
-                    "Guard"
+                    "Guard",
+                    "Zones",
+                    "Gate"
                 ],
                 "organization": [
                     "EHS Overview",
@@ -118,9 +118,9 @@
                     "Plant South"
                 ],
                 "products": [
+                    "Workforce Attendance",
                     "Gate",
                     "Zones",
-                    "Workforce Attendance",
                     "AI Analytics"
                 ],
                 "organization": [
@@ -139,8 +139,8 @@
                 "products": [
                     "Gate",
                     "Zones",
-                    "Shield",
                     "Visitor",
+                    "Shield",
                     "AI Analytics"
                 ],
                 "organization": [

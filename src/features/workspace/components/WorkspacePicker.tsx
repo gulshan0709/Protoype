@@ -7,6 +7,8 @@ import { useTheme } from "../../../shared/theme/Theme";
 import { Txt, Button } from "../../../shared/ui/Primitives";
 import { Icon } from "../../../shared/ui/Icon";
 import { Select } from "../../../shared/ui/Select";
+import { missionFor } from "../../../domain/contracts/priority";
+import { MissionLabel } from "./Priority";
 export function WorkspacePicker({
   onSave,
 }: {
@@ -69,7 +71,10 @@ export function WorkspacePicker({
         ))}
       </View>
       <Txt size={12} bold>
-        Role
+        Role preview
+      </Txt>
+      <Txt size={11} color={c.muted}>
+        For design review. Production users see their assigned role.
       </Txt>
       <Select
         label="Choose a role"
@@ -86,6 +91,7 @@ export function WorkspacePicker({
           })
         }
       />
+      <MissionLabel mission={missionFor(draft.industry, draft.role)} />
       <Txt size={12} bold>
         Assigned scope
       </Txt>
