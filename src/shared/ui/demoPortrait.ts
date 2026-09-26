@@ -24,6 +24,11 @@ export function demoGender(name?: string, image?: string): DemoGender | undefine
   const portrait = image ? originals.get(image) : undefined;
   return portrait ? (portrait === woman ? "woman" : "man") : undefined;
 }
+/** Bundled demo portrait for a fictional person without an uploaded photo. */
+export function portraitFor(name: string): ImageSourcePropType | undefined {
+  const gender = demoGender(name);
+  return gender === "woman" ? woman : gender === "man" ? man : undefined;
+}
 export function demoPortrait(uri: string, name?: string): ImageSourcePropType {
   if (!originals.has(uri)) return { uri };
   return demoGender(name, uri) === "woman" ? woman : man;

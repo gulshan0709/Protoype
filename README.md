@@ -178,6 +178,20 @@ No class or SIS backend is connected. Run `npm run test:class-setup` against the
 local app to check creation, upload, edit/delete, learners, scopes and mobile/dark
 layouts; `VIZENTA_QA_URL` overrides the default `http://localhost:8083`.
 
+**Session attendance.** Open any class or lab session to see its attendance: Class
+& Lab Attendance → Classes or Labs (Dean, Coordinator, Faculty), Faculty → Today, or
+Customer Admin → Coverage. The detail lists every mapped learner with profile image,
+status (Present, Late, Needs review, Absent, or Scheduled before the session starts),
+first capture time, match confidence and the attendance image. Tap the image to see
+the full frame with its detection box. Tiles and a bar summarise attended, rate, on
+time, late, review and absent. Filter chips, name/UID search, 12 learners per page
+and CSV export are included; phones show cards. The counts come from the row itself
+("59 / 68", "3 low confidence", "28 now"). Rows without a count (Faculty's timetable,
+the admin's coverage view) borrow the count of the same class from Classes or Labs.
+Learner assignment is seeded by class and start time, so the Dean, Coordinator and
+Faculty views of one session show the same learners present
+(`src/domain/classes/attendance.ts`, `tests/class-attendance.test.cjs`).
+
 - Four industry workspaces; all 29 supplied roles; 752 base role/page contracts with Store/Warehouse variants. The supplied 894 review configurations can be traversed through the same application shell.
 - Persona-specific Organization navigation and entitled Presence, Safety and Insights products. Store location managers do not receive Guard navigation. Security personas see Safety before Presence (see [Priority layer](#priority-layer)).
 - Desktop sidebar, collapsible navigation, tablet/phone bottom navigation, phone record cards, responsive tables and full record detail pages.
