@@ -1,4 +1,5 @@
 import { MediaPlayer, RecordMedia } from "./RecordMedia";
+import { PersonChip } from "./PersonChip";
 import React, {
   useEffect,
   useMemo,
@@ -1809,13 +1810,14 @@ export function DashboardView({
                     }}
                   >
                     <RecordMedia record={d} />
-                    <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-                      <Txt size={14} bold lines={1}>
-                        {text(d.cells.name)}
-                      </Txt>
-                      <Txt size={12} color={c.muted} lines={1}>
-                        {"UID: " + text(d.cells.uid)}
-                      </Txt>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <PersonChip
+                        name={text(d.cells.name)}
+                        uid={text(d.cells.uid) || undefined}
+                        image={
+                          (d.person as { image?: string } | undefined)?.image
+                        }
+                      />
                     </View>
                     <View
                       style={{ alignItems: "flex-end", gap: 6, maxWidth: 140 }}

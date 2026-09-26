@@ -1,4 +1,4 @@
-import { UserIdentity } from "./UserIdentity";
+import { PersonChip } from "./PersonChip";
 import React, { useState } from "react";
 import { View, Pressable } from "react-native";
 import type { DataRecord } from "../../../domain/contracts/types";
@@ -115,9 +115,7 @@ export function ClassLearners({
               }}
             >
               <View style={{ flexGrow: 1, flexBasis: 180, minWidth: 0 }}>
-                <UserIdentity record={{ ...record, setup: undefined, person: undefined,
-                  cells: { learner: l.name + " \u00b7 " + l.uid },
-                  detail: { ...record.detail, facts: [] } }} />
+                <PersonChip name={l.name} uid={l.uid} />
               </View>
               <Txt
                 size={12}

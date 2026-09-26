@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { useTheme } from "../../../shared/theme/Theme";
 import { Button, Field, Row, Txt } from "../../../shared/ui/Primitives";
 import { type Marking, TIME, minutes } from "../../../domain/gate/attendance";
+import { PersonOr } from "./PersonChip";
 export function MarkAttendanceForm({
   title,
   onSave,
@@ -38,12 +39,14 @@ export function MarkAttendanceForm({
   const err = (k: keyof Marking) => (submitted ? errors[k] : undefined);
   return (
     <View style={{ gap: 16 }}>
-      <Txt size={13}>
-        Mark attendance for{" "}
-        <Txt size={13} bold>
-          {title}
+      <PersonOr text={title}>
+        <Txt size={13}>
+          Mark attendance for{" "}
+          <Txt size={13} bold>
+            {title}
+          </Txt>
         </Txt>
-      </Txt>
+      </PersonOr>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         <View style={{ flexGrow: 1, flexBasis: 180 }}>
           <Field

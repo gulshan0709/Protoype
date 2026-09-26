@@ -86,6 +86,7 @@ import { MissionBoard, MissionLabel } from "./components/Priority";
 import { RecordDetail } from "./components/RecordDetail";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { Assistant } from "./components/Assistant";
+import { PersonAvatar, PersonOr, personIn } from "./components/PersonChip";
 import { ActionFlow } from "./components/ActionFlow";
 import { Settings } from "./components/Settings";
 import { Login } from "./components/Login";
@@ -545,14 +546,19 @@ export default function WorkspaceScreen() {
                 alignItems: "center",
               }}
             >
-              <Txt size={11} bold color={c.actionInk}>
-                {app.name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .slice(0, 2)
-                  .join("")
-                  .toUpperCase()}
-              </Txt>
+              {personIn(app.name) ? (
+                // A signed-in persona with a person's name shows their portrait.
+                <PersonAvatar name={app.name} size={35} decorative />
+              ) : (
+                <Txt size={11} bold color={c.actionInk}>
+                  {app.name
+                    .split(" ")
+                    .map((n) => n[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase()}
+                </Txt>
+              )}
             </Pressable>
           </Row>
           <ScrollView
@@ -1276,9 +1282,11 @@ export default function WorkspaceScreen() {
                       gap: 5,
                     }}
                   >
-                    <Txt size={13} bold>
-                      {hit.record.detail.title}
-                    </Txt>
+                    <PersonOr record={hit.record}>
+                      <Txt size={13} bold>
+                        {hit.record.detail.title}
+                      </Txt>
+                    </PersonOr>
                     <Txt size={12} color={c.muted}>
                       {hit.location.name} / {hit.location.tab}
                     </Txt>
@@ -1373,9 +1381,11 @@ export default function WorkspaceScreen() {
                       gap: 8,
                     }}
                   >
-                    <Txt size={13} bold>
-                      {r.detail.title}
-                    </Txt>
+                    <PersonOr record={r}>
+                      <Txt size={13} bold>
+                        {r.detail.title}
+                      </Txt>
+                    </PersonOr>
                     <Txt size={12} color={c.muted}>
                       {r.detail.summary}
                     </Txt>

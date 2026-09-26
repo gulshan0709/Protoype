@@ -8,6 +8,19 @@ function facts(record: DataRecord, items: { label: string; value: string }[]) {
     else record.detail.facts.push(item);
   }
 }
+// Learner gender follows the first name, so the form agrees with the person's
+// portrait. These are the demo name pools (contracts/demoVolume.ts); names in
+// neither list ("Import row 882") get no gender. Kept local because node tests
+// load this module without an import resolver; tests/portraits.test.cjs checks
+// every learner against src/shared/people/personName.ts.
+const femaleFirst = new Set(
+  "Aanya Aditi Ananya Anjali Asha Avni Diya Divya Gauri Ira Isha Ishita Kavya Kiara Meera Mira Naina Neha Nisha Pooja Priya Riya Saanvi Sana Shreya Sneha Tanvi Tara Trisha Anika Pallavi Ritika Sakshi Simran Swati Nandini Kriti Megha Kavita Anita Anaya Devika Lakshmi Radhika Shruti Maya Lena Lina Emma Olivia Sofia Grace Hannah Chloe Nora Ava Leah Zoe Ruby Claire Julia".split(" "),
+);
+const maleFirst = new Set(
+  "Aarav Aditya Akash Amit Arjun Aryan Dev Dhruv Harsh Ishaan Kabir Karan Krish Manav Nikhil Pranav Rahul Rohan Sahil Sameer Siddharth Varun Vihaan Vikram Yash Ayaan Rishi Kunal Tushar Nitin Rajat Gaurav Abhinav Ankit Mohit Ravi Arun Deepak Suresh Manish Sanjay Imran Farhan Owen Liam Noah Ethan Lucas Daniel Marcus Ryan Adam Caleb Nathan Julian Leo Miles Isaac Oscar".split(" "),
+);
+const learnerGender = (first: string) =>
+  femaleFirst.has(first) ? "Female" : maleFirst.has(first) ? "Male" : "";
 function section(
   record: DataRecord,
   title: string,
@@ -229,7 +242,7 @@ export function populateDemoData(education: Industry) {
                 uid: (uid || String(24031 + i)).replace(/^UID\s*/, ""),
                 first_name: parts[0],
                 last_name: parts.slice(1).join(" "),
-                gender: i % 2 ? "Female" : "Male",
+                gender: learnerGender(parts[0]),
                 email: parts.join(".").toLowerCase() + "@example.com",
                 mobile: "987652" + String(1000 + i),
                 dob: "2005-04-12",

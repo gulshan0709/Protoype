@@ -21,6 +21,7 @@ import {
   Card,
   Row,
 } from "../../../shared/ui/Primitives";
+import { PersonOr } from "./PersonChip";
 export function ActionFlow({
   action,
   record,
@@ -104,9 +105,11 @@ export function ActionFlow({
         label={inspect ? "Record review" : "Review action"}
         tone="pending"
       />
-      <Txt size={18} bold>
-        {record?.detail.title ?? page.heading}
-      </Txt>
+      <PersonOr record={record}>
+        <Txt size={18} bold>
+          {record?.detail.title ?? page.heading}
+        </Txt>
+      </PersonOr>
       <Txt size={13} color={c.muted}>
         {record?.detail.summary ?? page.description}
       </Txt>

@@ -19,6 +19,12 @@ import {
 } from "../../../shared/theme/Theme";
 import { Badge, Card, Row, Txt } from "../../../shared/ui/Primitives";
 import { Icon } from "../../../shared/ui/Icon";
+import {
+  PersonAvatar,
+  PersonOr,
+  PERSON_INLINE,
+  recordPerson,
+} from "./PersonChip";
 
 /** Quiet orientation label shown above the page title. */
 export function MissionLabel({ mission }: { mission: Mission }) {
@@ -47,15 +53,19 @@ function Pill({
   caption,
   value,
   accent,
+  record,
   onPress,
 }: {
   label: string;
   caption: string;
   value: string;
   accent: string;
+  /** Record the pill opens; a person record shows their avatar. */
+  record?: DataRecord;
   onPress: () => void;
 }) {
   const c = useTheme();
+  const person = record && recordPerson(record);
   return (
     <Pressable
       accessibilityRole="button"
@@ -76,6 +86,13 @@ function Pill({
         backgroundColor: c.surface,
       })}
     >
+      {person && (
+        <PersonAvatar
+          name={person.name}
+          image={person.image}
+          size={PERSON_INLINE}
+        />
+      )}
       <View style={{ flexShrink: 1, minWidth: 0 }}>
         <Txt size={10} color={c.muted}>
           {caption}
@@ -176,6 +193,7 @@ export function MissionBoard({
                 caption="Next"
                 value={next.title}
                 accent={color}
+                record={next.record}
                 onPress={() => onOpenRecord(next.record)}
               />
             )}
@@ -248,9 +266,14 @@ export function DecisionBar({
             <Txt size={11} color={c.muted}>
               {fact.label}
             </Txt>
-            <Txt size={13} bold color={fact.color} lines={2}>
-              {fact.value}
-            </Txt>
+            <PersonOr
+              text={fact.label === "Owner" ? fact.value : undefined}
+              size={PERSON_INLINE}
+            >
+              <Txt size={13} bold color={fact.color} lines={2}>
+                {fact.value}
+              </Txt>
+            </PersonOr>
           </View>
         ))}
       </View>

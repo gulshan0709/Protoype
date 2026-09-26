@@ -12,6 +12,7 @@ import {
   Txt,
   Badge,
 } from "../../../shared/ui/Primitives";
+import { PersonChip, personChip } from "./PersonChip";
 
 const coverageTitle = "Data and decision coverage";
 
@@ -83,16 +84,23 @@ export function ContextPanels({
                   alignItems: "flex-start",
                 }}
               >
-                <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-                  <Txt size={12} bold lines={1}>
-                    {item.label}
-                  </Txt>
-                  {!!item.meta && (
-                    <Txt size={11} color={c.muted} lines={1}>
-                      {item.meta}
+                {personChip(item.label) ? (
+                  // Items about a person use the standard person format.
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <PersonChip {...personChip(item.label, item.meta)!} />
+                  </View>
+                ) : (
+                  <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                    <Txt size={12} bold lines={1}>
+                      {item.label}
                     </Txt>
-                  )}
-                </View>
+                    {!!item.meta && (
+                      <Txt size={11} color={c.muted} lines={1}>
+                        {item.meta}
+                      </Txt>
+                    )}
+                  </View>
+                )}
                 <View style={{ maxWidth: "55%" }}>
                   <Badge label={cellText(item.value)} tone={item.tone} />
                 </View>

@@ -19,6 +19,7 @@ import { Button, Row, Txt } from "../../../shared/ui/Primitives";
 import { Dialog } from "../../../shared/ui/Dialog";
 import { Select } from "../../../shared/ui/Select";
 import type { ClassSetupRequest } from "./ClassSetupDialog";
+import { PersonOr } from "./PersonChip";
 import {
   WardenForm,
   HostelForm,
@@ -127,7 +128,9 @@ export function ResidenceSetupDialog({
         </Txt>
       ) : request.mode === "menu" && target ? (
         <View style={{ gap: 10 }}>
-          <Txt bold>{target.detail.title}</Txt>
+          <PersonOr record={target}>
+            <Txt bold>{target.detail.title}</Txt>
+          </PersonOr>
           <Button
             label="Edit"
             onPress={() => onRequest({ ...request, mode: "edit" })}

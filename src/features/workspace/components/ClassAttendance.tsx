@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import type { DataRecord, Tone } from "../../../domain/contracts/types";
 import {
   applyMarks,
@@ -19,9 +19,9 @@ import { Badge, Button, Card, Field, Row, SectionTitle, Txt } from "../../../sha
 import { Select } from "../../../shared/ui/Select";
 import { Dialog } from "../../../shared/ui/Dialog";
 import { Icon } from "../../../shared/ui/Icon";
-import { portraitFor } from "../../../shared/ui/demoPortrait";
 import { saveCsv } from "../../../shared/files/classCsv";
 import { MediaPlayer, RecordMedia } from "./RecordMedia";
+import { PersonChip } from "./PersonChip";
 
 const TONE: Record<AttendanceStatus, Tone> = {
   present: "healthy",
@@ -92,53 +92,9 @@ function mediaRecord(record: DataRecord, learner: SessionLearner, title: string,
 }
 const captured = (l: SessionLearner) => l.checkIn !== "—";
 
-function Avatar({ name, size = 36 }: { name: string; size?: number }) {
-  const c = useTheme();
-  const source = portraitFor(name);
-  const initials = name
-    .split(/\s+/)
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        overflow: "hidden",
-        backgroundColor: c.primarySoft,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      {source ? (
-        <Image source={source} accessibilityLabel={name + " profile image"} style={{ width: size, height: size }} />
-      ) : (
-        <Txt size={12} bold color={c.muted}>
-          {initials}
-        </Txt>
-      )}
-    </View>
-  );
-}
-
+// Learners use the standard person format (portrait, name, UID) of every list.
 function Person({ learner }: { learner: SessionLearner }) {
-  const c = useTheme();
-  return (
-    <Row style={{ gap: 10, flex: 1, minWidth: 0 }}>
-      <Avatar name={learner.name} />
-      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-        <Txt size={13} bold lines={1}>
-          {learner.name}
-        </Txt>
-        <Txt size={12} color={c.muted} lines={1}>
-          {"UID: " + learner.uid}
-        </Txt>
-      </View>
-    </Row>
-  );
+  return <PersonChip name={learner.name} uid={learner.uid} />;
 }
 
 function IconAction({ icon, label, onPress, disabled }: { icon: string; label: string; onPress: () => void; disabled?: boolean }) {
@@ -585,9 +541,9 @@ export function ClassAttendance({ pageId, record }: { pageId: string; record: Da
                     borderColor: c.border,
                   }}
                 >
-                  <Txt size={13} lines={1} style={{ flex: 1 }}>
-                    {`${r.name} · ${r.uid}`}
-                  </Txt>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <PersonChip name={r.name} uid={r.uid} />
+                  </View>
                   <Txt size={13} style={{ width: 90 }}>
                     {`${r.attended} / ${r.held}`}
                   </Txt>

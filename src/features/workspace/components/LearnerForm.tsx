@@ -1,6 +1,5 @@
-import { demoPortrait } from "../../../shared/ui/demoPortrait";
 import React, { useMemo, useState } from "react";
-import { Image, View } from "react-native";
+import { View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { useTheme } from "../../../shared/theme/Theme";
 import { Button, Field, Row, Txt } from "../../../shared/ui/Primitives";
@@ -15,6 +14,7 @@ import {
   emptyLearner,
   validateLearner,
 } from "../../../domain/learners/setup";
+import { PersonAvatar } from "./PersonChip";
 /** Image picker for learner photos (web, iOS Photos/Files, Android). */
 export async function pickImages(multiple: boolean) {
   const result = await DocumentPicker.getDocumentAsync({
@@ -113,10 +113,16 @@ export function AddLearnerForm({
         </Txt>
         <Row style={{ flexWrap: "wrap", gap: 10 }}>
           {!!form.image && (
-            <Image
-              accessibilityLabel="Learner image"
-              source={demoPortrait(form.image)}
-              style={{ width: 56, height: 56, borderRadius: 8 }}
+            // Same portrait as the list: the upload, else the person's pool portrait.
+            <PersonAvatar
+              name={
+                [form.first_name, form.last_name]
+                  .map((part) => part?.trim())
+                  .filter(Boolean)
+                  .join(" ") || "New learner"
+              }
+              image={form.image}
+              size={56}
             />
           )}
           <Button

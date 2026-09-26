@@ -25,6 +25,7 @@ import { Select } from "../../../shared/ui/Select";
 import { AddLearnerForm } from "./LearnerForm";
 import { LearnerBulkUpload } from "./LearnerBulkUpload";
 import type { ClassSetupRequest } from "./ClassSetupDialog";
+import { PersonOr } from "./PersonChip";
 export function LearnerSetupDialog({
   request,
   onRequest,
@@ -124,7 +125,9 @@ export function LearnerSetupDialog({
         <Txt>This action is not available in your current scope.</Txt>
       ) : request.mode === "menu" && target ? (
         <View style={{ gap: 10 }}>
-          <Txt bold>{target.detail.title}</Txt>
+          <PersonOr record={target}>
+            <Txt bold>{target.detail.title}</Txt>
+          </PersonOr>
           <Button
             label="Edit"
             onPress={() => onRequest({ ...request, mode: "edit" })}

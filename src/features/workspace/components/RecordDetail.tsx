@@ -1,4 +1,11 @@
-import { userIdentity } from "../../../domain/contracts/userIdentity";
+import {
+  PersonChip,
+  PersonOr,
+  PERSON_HEADER,
+  PERSON_INLINE,
+  personIdentity,
+  recordPerson,
+} from "./PersonChip";
 import { UserIdentity } from "./UserIdentity";
 import { MediaPlayer } from "./RecordMedia";
 import { ClassAttendance } from "./ClassAttendance";
@@ -46,6 +53,7 @@ export function RecordDetail({
         summary: `Workflow: ${record.state.label}. Original source status: ${(record.sourceState as { label: string }).label}. ${record.detail.summary}`,
       }
     : record.detail;
+  const header = personIdentity(record) ? undefined : recordPerson(record);
   const events = audit.filter(
     (e) =>
       e.recordId === record.id &&
@@ -67,8 +75,10 @@ export function RecordDetail({
         <Txt size={10} bold color={c.link} style={{ letterSpacing: 1.8 }}>
           {d.eyebrow.replaceAll("-", " ").replaceAll("_", " ").toUpperCase()}
         </Txt>
-        {userIdentity(record) ? (
-          <UserIdentity record={record} size={72} />
+        {personIdentity(record) ? (
+          <UserIdentity record={record} size={PERSON_HEADER} />
+        ) : header ? (
+          <PersonChip {...header} size={PERSON_HEADER} />
         ) : (
           <Txt size={30} bold style={{ letterSpacing: -0.7 }}>
             {d.title}
@@ -116,9 +126,11 @@ export function RecordDetail({
                   <Txt size={11} color={c.muted}>
                     {fact.label}
                   </Txt>
-                  <Txt size={13} bold>
-                    {cellText(fact.value)}
-                  </Txt>
+                  <PersonOr text={cellText(fact.value)}>
+                    <Txt size={13} bold>
+                      {cellText(fact.value)}
+                    </Txt>
+                  </PersonOr>
                 </View>
               ))}
             </View>
@@ -142,7 +154,9 @@ export function RecordDetail({
                       {item.tone ? (
                         <Badge label={cellText(item.value)} tone={item.tone} />
                       ) : (
-                        <Txt size={12}>{cellText(item.value)}</Txt>
+                        <PersonOr text={cellText(item.value)}>
+                          <Txt size={12}>{cellText(item.value)}</Txt>
+                        </PersonOr>
                       )}
                       {!!item.meta && (
                         <Txt size={10} color={c.subtle}>
@@ -183,9 +197,11 @@ export function RecordDetail({
                     <Txt size={11} bold>
                       {event.event}
                     </Txt>
-                    <Txt size={10} color={c.muted}>
-                      {event.actor ?? "Source service"}
-                    </Txt>
+                    <PersonOr text={event.actor} size={PERSON_INLINE}>
+                      <Txt size={10} color={c.muted}>
+                        {event.actor ?? "Source service"}
+                      </Txt>
+                    </PersonOr>
                     <Txt size={9} color={c.subtle}>
                       {event.time}
                     </Txt>
@@ -213,7 +229,9 @@ export function RecordDetail({
                     <Txt size={10} color={c.muted}>
                       {r.label}
                     </Txt>
-                    <Txt size={12}>{cellText(r.value)}</Txt>
+                    <PersonOr text={cellText(r.value)}>
+                      <Txt size={12}>{cellText(r.value)}</Txt>
+                    </PersonOr>
                   </View>
                 ))}
               </View>

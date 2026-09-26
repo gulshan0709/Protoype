@@ -9,6 +9,14 @@ import {
 import { saveCsv, pickCsv } from "../../../shared/files/classCsv";
 import { Button, Badge, Row, Txt } from "../../../shared/ui/Primitives";
 import { useTheme } from "../../../shared/theme/Theme";
+import { PersonChip } from "./PersonChip";
+
+// Name of a CSV row, previewed in the standard person format.
+const fullName = (row: { first_name?: string; last_name?: string }) =>
+  [row.first_name, row.last_name]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ");
 
 export function SurveillanceUserBulkUpload({
   existing,
@@ -111,9 +119,18 @@ export function SurveillanceUserBulkUpload({
             }}
           >
             <Row style={{ justifyContent: "space-between" }}>
-              <Txt size={13} bold lines={1} style={{ flex: 1 }}>
-                {row.data.uid || `Row ${row.key + 2}`}
-              </Txt>
+              {fullName(row.data) ? (
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <PersonChip
+                    name={fullName(row.data)}
+                    uid={row.data.uid || undefined}
+                  />
+                </View>
+              ) : (
+                <Txt size={13} bold lines={1} style={{ flex: 1 }}>
+                  {row.data.uid || `Row ${row.key + 2}`}
+                </Txt>
+              )}
               <Badge
                 label={row.status}
                 tone={
@@ -125,9 +142,6 @@ export function SurveillanceUserBulkUpload({
                 }
               />
             </Row>
-            <Txt size={12} color={c.muted}>
-              {row.data.first_name} · {row.data.last_name}
-            </Txt>
             <Txt
               size={12}
               color={row.status === "Invalid" ? c.critical : c.muted}

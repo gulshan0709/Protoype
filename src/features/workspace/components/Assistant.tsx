@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useApp } from "../../../application/AppProvider";
 import { industries } from "../../../domain/contracts/registry";
 import type { PageContract, DataRecord } from "../../../domain/contracts/types";
@@ -7,6 +7,7 @@ import { cellText } from "../../../domain/contracts/logic";
 import { useTheme } from "../../../shared/theme/Theme";
 import { Row, Txt, Button, Field, Card } from "../../../shared/ui/Primitives";
 import { Icon } from "../../../shared/ui/Icon";
+import { PersonChip, recordPerson } from "./PersonChip";
 export function Assistant({
   page,
   rows,
@@ -93,15 +94,38 @@ export function Assistant({
           <Txt size={10} color={c.muted}>
             Source: {page.heading}
           </Txt>
-          {matches.map((r) => (
-            <Button
-              key={r.id}
-              compact
-              label={r.detail.title}
-              icon="arrow"
-              onPress={() => onOpen(r)}
-            />
-          ))}
+          {matches.map((r) =>
+            recordPerson(r) ? (
+              // People are listed in the standard person format.
+              <Pressable
+                key={r.id}
+                accessibilityRole="button"
+                accessibilityLabel={r.detail.title}
+                onPress={() => onOpen(r)}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  borderRadius: 10,
+                  backgroundColor: c.surface,
+                }}
+              >
+                <PersonChip {...recordPerson(r)!} />
+                <Icon name="arrow" size={15} color={c.link} />
+              </Pressable>
+            ) : (
+              <Button
+                key={r.id}
+                compact
+                label={r.detail.title}
+                icon="arrow"
+                onPress={() => onOpen(r)}
+              />
+            ),
+          )}
         </Card>
       )}
       <Field

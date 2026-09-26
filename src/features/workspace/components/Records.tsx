@@ -1,6 +1,11 @@
-import { userIdentity } from "../../../domain/contracts/userIdentity";
 import { RecordMedia } from "./RecordMedia";
 import { UserIdentity } from "./UserIdentity";
+import {
+  PersonChip,
+  cellPerson,
+  personIdentity,
+  type PersonChipProps,
+} from "./PersonChip";
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   View,
@@ -149,6 +154,26 @@ export function Records({
   const [statusWidth, measureStatus] = useFitWidth(STATUS_MIN, STATUS_MAX);
   const [actionsWidth, measureActions] = useFitWidth(ACTIONS_MIN, 320);
   const hasCapture = columns.some((col) => col.id === "capture");
+  // Person chips of the visible rows: the row's identity (or a first cell
+  // naming a person) and every other cell naming someone else. Sorting,
+  // filtering and search keep using the cell data.
+  const people = new Map(
+    visible.map((row) => {
+      const identity = personIdentity(row);
+      const lead = identity
+        ? undefined
+        : cellPerson(row.cells[page.columns[0].id]);
+      const cells: Record<string, PersonChipProps | undefined> = {};
+      columns.forEach((col, j) => {
+        if (col.id !== "capture" && (j > 0 || !identity))
+          cells[col.id] = cellPerson(
+            row.cells[col.id],
+            j > 0 ? (identity ?? lead) : undefined,
+          );
+      });
+      return [row.id, { identity, lead, cells }] as const;
+    }),
+  );
   const filterFields = (
     <>
       {page.filters
@@ -387,7 +412,7 @@ export function Records({
                 }}
               >
                 <Row style={{ alignItems: "center", gap: 10 }}>
-                  {userIdentity(row) ? (
+                  {people.get(row.id)?.identity ? (
                     <>
                       {columns.some((col) => col.id === "capture") ? (
                         <Pressable
@@ -407,6 +432,10 @@ export function Records({
                         </View>
                       )}
                     </>
+                  ) : people.get(row.id)?.lead ? (
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <PersonChip {...people.get(row.id)!.lead!} />
+                    </View>
                   ) : (
                     <Txt size={13} bold style={{ flex: 1 }}>
                       {cellText(row.cells[page.columns[0].id])}
@@ -440,6 +469,19 @@ export function Records({
                         </Txt>
                         {col.id === "capture" ? (
                           <RecordMedia record={row} />
+                        ) : people.get(row.id)?.cells[col.id] ? (
+                          <View
+                            style={{
+                              flex: 1.4,
+                              minWidth: 0,
+                              alignItems: "flex-end",
+                            }}
+                          >
+                            <PersonChip
+                              {...people.get(row.id)!.cells[col.id]!}
+                              align="end"
+                            />
+                          </View>
                         ) : (
                           <Txt size={12} style={{ flex: 1.4, textAlign: "right" }}>
                             {cellText(row.cells[col.id])}
@@ -593,8 +635,7 @@ export function Records({
                     >
                       {col.id === "capture" ? (
                         <RecordMedia record={row} />
-                      ) : j === 0 &&
-                        userIdentity(row) ? (
+                      ) : j === 0 && people.get(row.id)?.identity ? (
                         <>
                           {columns.some((col) => col.id === "capture") ? (
                             <Pressable
@@ -612,6 +653,9 @@ export function Records({
                             <UserIdentity record={row} />
                           )}
                         </>
+                      ) : people.get(row.id)?.cells[col.id] ? (
+                        // Any other cell naming a person (host, owner, approver…).
+                        <PersonChip {...people.get(row.id)!.cells[col.id]!} />
                       ) : (
                         <>
                           <Txt size={12} bold={j === 0}>

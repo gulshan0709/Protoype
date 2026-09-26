@@ -4,7 +4,11 @@ import {
   type DetectionKind,
 } from "../../../domain/contracts/detectionDemo";
 import { userIdentity } from "../../../domain/contracts/userIdentity";
-import { demoGender, demoPortrait } from "../../../shared/ui/demoPortrait";
+import {
+  demoGender,
+  demoPortrait,
+  portraitSource,
+} from "../../../shared/ui/demoPortrait";
 import { demoStills, type DemoStill } from "./demoCaptures";
 import { useReducedMotion } from "../../../shared/motion/MotionProvider";
 import React, { useState, useEffect, useRef } from "react";
@@ -380,7 +384,11 @@ function FaceCapture({
       }}
     >
       <Image
-        source={demoPortrait(uri, name)}
+        // The person's own portrait at the drawn size (thumbnail or HD).
+        source={
+          portraitSource(name ?? "", { image: uri, size }) ??
+          demoPortrait(uri, name)
+        }
         accessibilityLabel="Face capture"
         resizeMode="cover"
         style={{ width: size, height: size }}
