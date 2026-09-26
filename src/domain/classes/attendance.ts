@@ -7,7 +7,10 @@ import type { Cell, DataRecord } from "../contracts/types";
  * many learners are present, need review or are absent, so the detail always
  * agrees with the table. Assignment is seeded by class and session start, so
  * the Dean, Coordinator and Faculty views of the same class show the same
- * learners present.
+ * learners present. Data points follow skillatracker-ui-demo's class
+ * attendance view (Attendanceview.jsx): UID, name, email, status, type, first
+ * and last image captured time, duration, image, video and manual marking,
+ * with a session date and a consolidated report.
  */
 
 export type AttendanceStatus = "present" | "late" | "review" | "absent" | "scheduled";
@@ -16,9 +19,15 @@ export interface SessionLearner {
   name: string;
   email: string;
   status: AttendanceStatus;
-  /** First verified capture, "—" when there is none. */
+  /** First image captured time, "—" when there is none. */
   checkIn: string;
+  /** Last image captured time, "—" when there is none. */
+  lastCapture: string;
+  /** Minutes between the first and last capture, e.g. "47 min". */
+  duration: string;
   confidence: string;
+  /** "Auto" when cameras recorded it, "Manual" when marked by staff. */
+  type: "Auto" | "Manual" | "—";
 }
 export interface ClassSession {
   title: string;
@@ -27,6 +36,9 @@ export interface ClassSession {
   end?: string;
   mode: "Snapshot" | "Continuous";
   upcoming: boolean;
+  /** Session day shown ("Sep 15") and the row's own day. */
+  date: string;
+  today: string;
   learners: SessionLearner[];
   counts: Record<AttendanceStatus, number> & { total: number; attended: number };
 }
@@ -34,6 +46,11 @@ export interface ClassSession {
 /** Pages whose rows are class or lab sessions with a roster. */
 const sessionPages =
   /^(ca-class-coverage|(dean|coordinator|faculty)-(classes|labs)|faculty-attendance-today)$/;
+/** The demo corpus is a snapshot of Tue 15 Sep 2026 at 09:45. */
+export const SNAPSHOT_DAY = "Sep 15";
+const SNAPSHOT_NOW = "09:45";
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const text = (value: Cell | undefined): string =>
   value == null
@@ -71,6 +88,20 @@ const minutesOf = (hhmm: string) => {
   return h * 60 + m;
 };
 
+/** The session day and the four weekdays before it, newest first. */
+export function sessionDates(today = SNAPSHOT_DAY) {
+  const [month, day] = today.split(" ");
+  let d = new Date(2026, Math.max(0, MONTHS.indexOf(month)), Number(day) || 15);
+  const out: { value: string; label: string }[] = [];
+  while (out.length < 5) {
+    const value = `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+    if (d.getDay() !== 0 && d.getDay() !== 6)
+      out.push({ value, label: `${DAYS[d.getDay()]}, ${value}${out.length ? "" : " (latest)"}` });
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+  }
+  return out;
+}
+
 const cellsOf = (record: DataRecord) =>
   Object.fromEntries(Object.entries(record.cells).map(([k, v]) => [k, text(v)])) as Record<string, string>;
 const titleOf = (record: DataRecord, cells = cellsOf(record)) =>
@@ -103,16 +134,24 @@ function statedCounts(cells: Record<string, string>) {
   return { attended, total, lowConfidence };
 }
 
+function recount(learners: SessionLearner[]) {
+  const counts = { present: 0, late: 0, review: 0, absent: 0, scheduled: 0 };
+  for (const l of learners) counts[l.status]++;
+  return { ...counts, total: learners.length, attended: counts.present + counts.late };
+}
+
 /**
  * `related` holds the other session rows of the tenant (Classes and Labs of
  * every persona). A row without its own count (Faculty's timetable, the
  * admin's coverage view) borrows the count of the same class there, so every
- * view of one session shows the same learners present.
+ * view of one session shows the same learners present. `date` selects an
+ * earlier session of the same class; the row's own figures describe its day.
  */
 export function classSession(
   pageId: string,
   record: DataRecord,
   related: DataRecord[] = [],
+  date?: string,
 ): ClassSession | undefined {
   if (!sessionPages.test(pageId)) return undefined;
   const cells = cellsOf(record);
@@ -133,10 +172,15 @@ export function classSession(
         : 50;
   const end = range?.[2] ?? clock(minutesOf(start) + (planned > 0 ? planned : 50));
   const mode = /continuous/i.test(Object.values(cells).join(" ")) || lab ? "Continuous" : "Snapshot";
-  const upcoming =
+  const today = (cells.session ?? "").match(/^[A-Z][a-z]{2} \d{1,2}/)?.[0] ?? SNAPSHOT_DAY;
+  const selected = date ?? today;
+  const past = selected !== today;
+  let upcoming =
+    !past &&
     /not started|upcoming|prepare|scheduled/i.test(
       [cells.session, cells.capture, cells.state, cells.attendance, record.state.label].join(" "),
-    ) && attended === undefined;
+    ) &&
+    attended === undefined;
 
   let key = title + "@" + start;
   if (attended === undefined && !upcoming) {
@@ -156,7 +200,13 @@ export function classSession(
   }
   const mapped = (record.demoLearners as { uid: string; name: string; email?: string }[] | undefined) ?? [];
   total = Math.min(120, Math.max(1, total ?? (mapped.length || 30)));
-  if (attended === undefined && !upcoming) {
+  if (past) {
+    // Earlier sessions of the class: their own seeded attendance, 82–95 %.
+    key += "|" + selected;
+    attended = Math.round(total * (0.82 + (hash(key) % 14) / 100));
+    lowConfidence = hash(key) % 3;
+    upcoming = false;
+  } else if (attended === undefined && !upcoming) {
     // Rows without a count (configuration and timetable views) get a rate that
     // fits their state: healthy sessions attend 88–96 %, others lower.
     const base = { healthy: 0.88, complete: 0.88, attention: 0.8, pending: 0.8 }[record.state.tone as string] ?? 0.72;
@@ -180,28 +230,36 @@ export function classSession(
     else status.set(l.uid, "absent");
   });
   const begin = minutesOf(start);
+  // Today's sessions cannot have captures after the snapshot time.
+  const until = Math.min(minutesOf(end), past ? Infinity : minutesOf(SNAPSHOT_NOW));
   const learners: SessionLearner[] = roster.map((l) => {
     const s = status.get(l.uid)!;
     const h = hash(key + "@" + l.uid);
     const offset = s === "late" ? 11 + (h % 14) : s === "review" ? h % 20 : h % 9;
     const captured = s === "present" || s === "late" || s === "review";
+    const first = begin + offset;
+    const last = Math.max(
+      first + 5,
+      s === "review" ? Math.min(until, first + 8 + ((h >>> 3) % 20)) : until - ((h >>> 5) % 6),
+    );
     return {
       ...l,
       status: s,
-      checkIn: captured ? clock(begin + offset) : "—",
+      checkIn: captured ? clock(first) : "—",
+      lastCapture: captured ? clock(last) : "—",
+      duration: captured ? `${last - first} min` : "—",
       confidence: captured
         ? (s === "review" ? 55 + (h % 140) / 10 : 92 + (h % 75) / 10).toFixed(1) + "%"
         : "—",
+      type: captured ? "Auto" : "—",
     };
   });
-  const counts = { present: 0, late: 0, review: 0, absent: 0, scheduled: 0 };
-  for (const l of learners) counts[l.status]++;
 
   const room =
     cells.room ||
     title.match(/\b(Room|Lab) \d+\b/)?.[0] ||
     (setup.room ? (lab ? "Lab " : "Room ") + String(setup.room) : "");
-  const day = (cells.session ?? "").match(/^[A-Z][a-z]{2} \d{1,2}/)?.[0] ?? "Today";
+  const day = past ? selected : cells.session?.match(/^[A-Z][a-z]{2} \d{1,2}/)?.[0] ?? "Today";
   const subtitle = [
     cells.path || (setup.department ? `${setup.department} · ${setup.program}` : ""),
     `${day} · ${start}${end ? "–" + end : ""}`,
@@ -217,24 +275,81 @@ export function classSession(
     end,
     mode,
     upcoming,
+    date: selected,
+    today,
     learners,
-    counts: { ...counts, total, attended: counts.present + counts.late },
+    counts: recount(learners),
   };
 }
 
-/** CSV of the session roster, with spreadsheet-formula prefixes escaped. */
+/** Staff marks from the "Mark attendance" action (legacy Mark_Attendance), kept for the session. */
+export type AttendanceMarks = Record<string, "present" | "absent">;
+export function applyMarks(session: ClassSession, marks: AttendanceMarks): ClassSession {
+  if (!Object.keys(marks).length) return session;
+  const learners = session.learners.map((l): SessionLearner => {
+    const mark = marks[l.uid];
+    if (!mark) return l;
+    return { ...l, status: mark, type: "Manual" };
+  });
+  return { ...session, learners, counts: recount(learners) };
+}
+
+/** Consolidated report: each learner's attendance across the term's sessions of this class. */
+export function termSummary(session: ClassSession) {
+  const held = 18;
+  const rows = session.learners
+    .map((l) => {
+      const h = hash(session.title + "~" + l.uid);
+      let rate = 0.8 + (h % 20) / 100;
+      if (l.status === "absent") rate -= 0.14;
+      if (l.status === "review") rate -= 0.05;
+      const attended = Math.round(held * Math.min(1, Math.max(0.45, rate)));
+      return { uid: l.uid, name: l.name, held, attended, rate: Math.round((attended / held) * 100) };
+    })
+    .sort((a, b) => a.rate - b.rate || a.uid.localeCompare(b.uid));
+  const average = rows.length ? Math.round(rows.reduce((sum, r) => sum + r.rate, 0) / rows.length) : 0;
+  return { held, rows, average, atRisk: rows.filter((r) => r.rate < 75).length };
+}
+
+export const STATUS_LABEL: Record<AttendanceStatus, string> = {
+  present: "Present",
+  late: "Late",
+  review: "Needs review",
+  absent: "Absent",
+  scheduled: "Scheduled",
+};
+
+/** CSV of the session roster (legacy column names), with formula prefixes escaped. */
 export function sessionCsv(session: ClassSession) {
   const quote = (v: string) => '"' + (/^[=+\-@]/.test(v) ? "'" + v : v).replaceAll('"', '""') + '"';
-  const label: Record<AttendanceStatus, string> = {
-    present: "Present",
-    late: "Late",
-    review: "Needs review",
-    absent: "Absent",
-    scheduled: "Scheduled",
-  };
   return [
-    ["UID", "Name", "Email", "Status", "Check-in", "Confidence"],
-    ...session.learners.map((l) => [l.uid, l.name, l.email, label[l.status], l.checkIn, l.confidence]),
+    [
+      "UID",
+      "First Name",
+      "Last Name",
+      "Email",
+      "Status",
+      "Type",
+      "First Image Captured Time",
+      "Last Image Captured Time",
+      "Time Duration",
+      "Confidence",
+    ],
+    ...session.learners.map((l) => {
+      const [first, ...rest] = l.name.split(" ");
+      return [
+        l.uid,
+        first,
+        rest.join(" "),
+        l.email,
+        STATUS_LABEL[l.status],
+        l.type,
+        l.checkIn,
+        l.lastCapture,
+        l.duration,
+        l.confidence,
+      ];
+    }),
   ]
     .map((row) => row.map(quote).join(","))
     .join("\r\n");

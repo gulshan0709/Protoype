@@ -1,7 +1,7 @@
 import { userIdentity } from "../../../domain/contracts/userIdentity";
 import { UserIdentity } from "./UserIdentity";
 import { MediaPlayer } from "./RecordMedia";
-import { ClassAttendance, classSessionFor } from "./ClassAttendance";
+import { ClassAttendance } from "./ClassAttendance";
 import { DecisionBar } from "./Priority";
 import { missionFor } from "../../../domain/contracts/priority";
 import React from "react";
@@ -40,10 +40,6 @@ export function RecordDetail({
 }) {
   const c = useTheme();
   const { audit, workspace } = useApp();
-  const session = React.useMemo(
-    () => (workspace.industry === "education" ? classSessionFor(page.id, record) : undefined),
-    [workspace.industry, page.id, record],
-  );
   const d = record.localWorkflow
     ? {
         ...record.detail,
@@ -96,7 +92,7 @@ export function RecordDetail({
           />
         ))}
       </DecisionBar>
-      {session && <ClassAttendance session={session} record={record} />}
+      {workspace.industry === "education" && <ClassAttendance pageId={page.id} record={record} />}
       <View style={{ flexDirection: wide ? "row" : "column", gap: 22 }}>
         <View style={{ flex: 1, gap: 20 }}>
           <Card>

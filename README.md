@@ -180,12 +180,25 @@ layouts; `VIZENTA_QA_URL` overrides the default `http://localhost:8083`.
 
 **Session attendance.** Open any class or lab session to see its attendance: Class
 & Lab Attendance → Classes or Labs (Dean, Coordinator, Faculty), Faculty → Today, or
-Customer Admin → Coverage. The detail lists every mapped learner with profile image,
-status (Present, Late, Needs review, Absent, or Scheduled before the session starts),
-first capture time, match confidence and the attendance image. Tap the image to see
-the full frame with its detection box. Tiles and a bar summarise attended, rate, on
-time, late, review and absent. Filter chips, name/UID search, 12 learners per page
-and CSV export are included; phones show cards. The counts come from the row itself
+Customer Admin → Coverage. The data points follow skillatracker-ui-demo's class
+attendance view (`Attendanceview.jsx`). The detail lists every mapped learner with:
+- profile image, UID and email
+- status (Present, Late, Needs review, Absent, or Scheduled before the session starts)
+- type (Auto from cameras, Manual when marked by staff)
+- first and last image captured time, duration and match confidence
+- the attendance image; tap it for the full frame with its detection box
+- the recording, played in a dialog
+
+**Mark attendance** toggles a learner between present and absent after confirmation,
+with an optional reason. Marks are kept for the session.
+
+A **Session date** picker shows the four previous class days, each with its own
+seeded attendance. **View images** opens a gallery of every capture.
+**Consolidated report** shows each learner's term attendance (18 sessions) and
+flags learners below 75%. **Export** writes the legacy CSV columns.
+
+Tiles and a bar summarise attended, rate, on time, late, review and absent. Filter
+chips, name/UID search and 12 learners per page are included; phones show cards. The counts come from the row itself
 ("59 / 68", "3 low confidence", "28 now"). Rows without a count (Faculty's timetable,
 the admin's coverage view) borrow the count of the same class from Classes or Labs.
 Learner assignment is seeded by class and start time, so the Dean, Coordinator and
