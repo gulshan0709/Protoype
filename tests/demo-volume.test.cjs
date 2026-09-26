@@ -211,3 +211,21 @@ test("corporate placeholders are replaced by authored rows inside each persona's
     if (!/^(Asteron Group|Northstar Holdings)/.test(r.cells.customer))
       assert.deepEqual(r.scope, ["All customers"], r.cells.customer);
 });
+
+test("derived rows never repeat an entity (campus, gate, vendor, camera) from their page", () => {
+  const severity = /^(critical|high|medium|low|normal|review|open|closed|urgent|watch|info|warning|minor|major)$/i;
+  for (const id of industries) {
+    const d = load(id);
+    for (const { role, tab, variant, page } of pages(d)) {
+      const lead = (r) => cellText(r.cells[page.columns[0]?.id]);
+      const authored = {};
+      for (const r of page.records) authored[lead(r)] = (authored[lead(r)] ?? 0) + 1;
+      withDemoVolume(page, d, role, tab, variant);
+      const counts = {};
+      for (const r of page.records) counts[lead(r)] = (counts[lead(r)] ?? 0) + 1;
+      for (const [l, n] of Object.entries(counts))
+        if (!severity.test(l) && !/^\d{2}:\d{2}/.test(l))
+          assert.ok(n <= Math.max(1, authored[l] ?? 0), `${id}/${page.id}: "${l}" x${n}`);
+    }
+  }
+});

@@ -69,7 +69,7 @@ const tokens = new RegExp(
     "(?<ip>\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b)",
     "(?<phone>(?<!\\d)(?:\\+91[\\s-]?)?[6-9]\\d{9}(?!\\d))",
     "(?<percent>(?<![\\d.])\\d{1,3}(?:\\.\\d+)?%)",
-    "(?<keep>\\b\\d+h\\s?\\d+m\\b|\\bv?\\d+(?:\\.\\d+)+|\\b20[2-3]\\d(?:[–-]\\d{2})?(?!\\d)|\\b\\d+\\s?(?:h|hrs?|hours?|d|days?|wks?|weeks?|months?|yrs?|years?)\\b|\\bp\\d{2,3}\\b|\\b24\\/7\\b|\\b(?:week|Week|Wk|Semester|Sem|Term|Wave|Phase|Sprint|Build|Shift|Year|Grade|Class|Standard)\\s\\d+\\b|(?<=[-_#])0\\d(?!\\d))",
+    "(?<keep>\\b\\d+h\\s?\\d+m\\b|\\bv?\\d+(?:\\.\\d+)+|(?<![\\w-])20[2-3]\\d(?:[–-]\\d{2})?(?!\\d)|\\b\\d+\\s?(?:h|hrs?|hours?|d|days?|wks?|weeks?|months?|yrs?|years?)\\b|\\bp\\d{2,3}\\b|\\b24\\/7\\b|\\b(?:week|Week|Wk|Semester|Sem|Term|Wave|Phase|Sprint|Build|Shift|Year|Grade|Class|Standard)\\s\\d+\\b|(?<=[-_#])0\\d(?!\\d))",
     `(?<label>\\b(?:${labels})\\s(?:No\\.\\s)?(?<labelNo>\\d{1,2})(?!\\d))`,
     "(?<long>(?<![\\d.])\\d{3,}(?![\\d.]))",
     "(?<two>(?<![\\d.,])[1-9]\\d(?![\\d.,%:]))",
@@ -384,14 +384,47 @@ function cellText(value: Cell | undefined): string {
     : String(value);
 }
 /** What makes a row a different thing, ignoring when it happened. */
-function identity(page: PageContract, record: DataRecord) {
-  // A time-only first column (audit logs, timetables) defers to the next ones.
-  const [lead, ...rest] = page.columns
+function identity(page: PageContract, record: DataRecord, mode: (lead: string) => LeadMode) {
+  const [lead, ...rest] = leadCells(page, record);
+  if (!lead) return record.detail.title;
+  // A category lead ("Critical") needs the next columns; an entity name
+  // ("Main Gate", "CAM-012", "SecureLine") identifies the row on its own.
+  const m = mode(lead);
+  if (m === "category") return [lead, ...rest.slice(0, 2)].join("|");
+  return m === "scoped" ? lead + "@" + record.scope.join("+") : lead;
+}
+/** First columns without their times; a time-only first column (audit logs) defers to the next ones. */
+function leadCells(page: PageContract, record: DataRecord) {
+  return page.columns
     .slice(0, 4)
     .map((c) => cellText(record.cells[c.id]).replace(clock, "").replace(/^[\s·–-]+$/, "").trim())
     .filter(Boolean);
-  if (!lead) return record.detail.title;
-  return lead.length <= 12 ? [lead, ...rest.slice(0, 2)].join("|") : lead;
+}
+const severity = /^(critical|high|medium|low|normal|review|open|closed|urgent|watch|info|warning|minor|major)$/i;
+type LeadMode = "entity" | "scoped" | "category";
+/**
+ * How a first-column value identifies its row: an entity name is unique; a
+ * name the authored rows repeat once per scope ("Furnace Control Room" per
+ * plant) is unique within its scope; severity words, or leads repeated inside
+ * one scope, are categories. Filter values are not categories: they often
+ * list the entities themselves (campuses, people).
+ */
+function categories(page: PageContract, authored: DataRecord[]) {
+  const counts = new Map<string, number>();
+  const scopes = new Map<string, Set<string>>();
+  for (const r of authored) {
+    const lead = leadCells(page, r)[0];
+    if (!lead) continue;
+    counts.set(lead, (counts.get(lead) ?? 0) + 1);
+    scopes.set(lead, (scopes.get(lead) ?? new Set()).add(r.scope.join("+")));
+  }
+  const mode = (lead: string): LeadMode => {
+    if (severity.test(lead)) return "category";
+    const n = counts.get(lead) ?? 0;
+    if (n <= 1) return "entity";
+    return scopes.get(lead)!.size === n ? "scoped" : "category";
+  };
+  return { counts, mode };
 }
 
 const expanded = new WeakSet<PageContract>();
@@ -440,7 +473,10 @@ export function withDemoVolume(
   const assets = [...new Set(authored.map((r) => r.captureAsset).filter((a) => a !== undefined))];
   const records = [...authored];
   const ids = new Set(records.map((r) => r.id));
-  const keys = new Set(records.map((r) => identity(page, r)));
+  const cats = categories(page, authored);
+  const keys = new Set(records.map((r) => identity(page, r, cats.mode)));
+  // Rows per category lead, so e.g. "Critical" never floods a queue.
+  const perLead = new Map(cats.counts);
   const clones = new Map<DataRecord, number>();
   // A template gets at most its fair share of new rows, so a page whose only
   // variable row is an exception does not fill up with that exception.
@@ -477,11 +513,14 @@ export function withDemoVolume(
     strings(template, (s) => plan.scan(s), true);
     const next = walk(template, (s) => plan.text(s), true) as DataRecord;
     next.scope = [...scope];
-    const key = identity(page, next);
-    if (keys.has(key)) {
+    const key = identity(page, next, cats.mode);
+    const lead = leadCells(page, next)[0] ?? "";
+    const cap = Math.max(4, 3 * (cats.counts.get(lead) ?? 1));
+    if (keys.has(key) || (cats.mode(lead) === "category" && (perLead.get(lead) ?? 0) >= cap)) {
       misses.set(template, (misses.get(template) ?? 0) + 1);
       continue;
     }
+    perLead.set(lead, (perLead.get(lead) ?? 0) + 1);
     let id = next.id;
     for (let n = 2; ids.has(id); n++) id = template.id + "-" + String(n).padStart(2, "0");
     next.id = id;
