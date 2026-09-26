@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import { Platform, Share, useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ThemeContext, light, dark } from "../shared/theme/Theme";
+import { ThemeContext, themeFor, type ThemeStyle } from "../shared/theme/Theme";
 import { defaultWorkspace, validWorkspace } from "../domain/contracts/registry";
 import { csvFor } from "../domain/contracts/logic";
 import type {
@@ -21,6 +21,8 @@ type Theme = "light" | "dark" | "system";
 interface Saved {
   workspace: Workspace;
   theme: Theme;
+  themeStyle: ThemeStyle;
+  navigationCollapsed: boolean;
   session: boolean;
   rememberSession: boolean;
   name: string;
@@ -31,6 +33,8 @@ interface Saved {
 const initial: Saved = {
   workspace: defaultWorkspace,
   theme: "light",
+  themeStyle: "signature",
+  navigationCollapsed: false,
   session: false,
   rememberSession: true,
   name: "Alex Morgan",
@@ -180,7 +184,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const resolved = saved.theme === "system" ? system : saved.theme;
   return (
     <Context.Provider value={value}>
-      <ThemeContext.Provider value={resolved === "dark" ? dark : light}>
+      <ThemeContext.Provider
+        value={themeFor(
+          saved.themeStyle,
+          resolved === "dark" ? "dark" : "light",
+        )}
+      >
         {children}
       </ThemeContext.Provider>
     </Context.Provider>

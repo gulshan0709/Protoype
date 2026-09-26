@@ -54,7 +54,6 @@ import {
   actionQueue,
   evidenceStartsCollapsed,
   missionFor,
-  queueItems,
 } from "../../domain/contracts/priority";
 import { localRecord } from "../../domain/contracts/lifecycle";
 import type {
@@ -82,7 +81,7 @@ import { Navigation } from "./components/Navigation";
 import { Metrics } from "./components/Metrics";
 import { Records } from "./components/Records";
 import { ContextPanels } from "./components/ContextPanels";
-import { MissionBoard, MissionLabel } from "./components/Priority";
+import { MissionLabel } from "./components/Priority";
 import { RecordDetail } from "./components/RecordDetail";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { Assistant } from "./components/Assistant";
@@ -91,7 +90,6 @@ import { ActionFlow } from "./components/ActionFlow";
 import { Settings } from "./components/Settings";
 import { Login } from "./components/Login";
 import { LaunchScreen } from "../../shared/ui/LaunchScreen";
-import { MotionView } from "../../shared/motion/MotionView";
 import { applySetup, useSetupState } from "../../application/classSetupStore";
 import { kindOf, setupKinds } from "../../domain/classes/setup";
 import {
@@ -126,7 +124,7 @@ export default function WorkspaceScreen() {
     userGroup?: string;
   }>();
   const [modal, setModal] = useState("");
-  const [collapsed, setCollapsed] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
@@ -148,6 +146,13 @@ export default function WorkspaceScreen() {
         metric: params.metric,
       }
     : homeLocation(app.workspace);
+  const productFamily = industry.core.productFamilies[location.name]?.family;
+  const headerAccent =
+    productFamily === "Safety"
+      ? c.missionSecurity
+      : productFamily === "Insights"
+        ? c.missionCombined
+        : c.link;
   const peopleUsers =
     app.workspace.industry === "education" &&
     location.type === "org" &&
@@ -295,8 +300,21 @@ export default function WorkspaceScreen() {
   const phone = width < 768;
   const side = width >= 1024;
   const wide = width > 1050;
+  const collapsed = app.navigationCollapsed;
   const close = useCallback(() => setModal(""), []);
-  const open = useCallback((name: string) => setModal(name), []);
+  const openAssistant = useCallback(() => {
+    if (side) {
+      setModal("");
+      setAssistantOpen(true);
+    } else setModal("assistant");
+  }, [side]);
+  const open = useCallback(
+    (name: string) => {
+      if (name === "assistant") openAssistant();
+      else setModal(name);
+    },
+    [openAssistant],
+  );
   const go = (next: Location, replace = false) => {
     const href = {
       pathname: "/" as const,
@@ -424,12 +442,13 @@ export default function WorkspaceScreen() {
       />
       <View style={{ flex: 1, flexDirection: "row" }}>
         {side && (
-          <View style={{ width: collapsed ? 64 : 232 }}>
+          <View style={{ width: collapsed ? 72 : 232 }}>
             <Navigation
               location={location}
               navigate={navigate}
               open={open}
               collapsed={collapsed}
+              onToggle={() => app.update({ navigationCollapsed: !collapsed })}
             />
           </View>
         )}
@@ -438,30 +457,51 @@ export default function WorkspaceScreen() {
             style={{
               height: 66,
               paddingHorizontal: phone ? 10 : 18,
-              borderBottomWidth: 1,
-              borderColor: c.border,
-              backgroundColor: c.surface,
+              borderBottomWidth: 2,
+              borderBottomColor: headerAccent,
+              backgroundColor: c.hero,
               gap: phone ? 8 : 15,
             }}
           >
-            <IconButton
-              name="menu"
-              label={side ? "Toggle sidebar" : "Open navigation"}
-              onPress={() => (side ? setCollapsed(!collapsed) : open("menu"))}
-            />
+            {!side && (
+              <IconButton
+                name="menu"
+                label="Open navigation"
+                onPress={() => open("menu")}
+              />
+            )}
             {phone ? (
-              // Same 35 px tile and radius as the header icon buttons.
-              <BrandMark size={35} radius={9} markScale={0.72} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open Ask Vizenta"
+                onPress={openAssistant}
+                style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+              >
+                <BrandMark size={35} radius={9} markScale={0.72} />
+              </Pressable>
             ) : (
-              <Row style={{ flex: 1 }}>
-                <Txt size={12} color={c.muted}>
-                  {industry.label}
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                <Txt
+                  size={18}
+                  bold
+                  color={headerAccent}
+                  lines={1}
+                  style={{ letterSpacing: -0.4 }}
+                >
+                  {metric
+                    ? metric.label
+                    : home
+                      ? "Workspace overview"
+                      : location.name}
                 </Txt>
-                <Icon name="chevron" size={12} />
-                <Txt size={12} bold>
-                  {home ? "Overview" : location.name}
+                <Txt size={11} color={c.muted} lines={1}>
+                  {metric
+                    ? "Understand this measure and its source context."
+                    : home
+                      ? "A clear picture of what matters. All in one place."
+                      : page?.description}
                 </Txt>
-              </Row>
+              </View>
             )}
             {!phone && (
               <Pressable
@@ -496,6 +536,18 @@ export default function WorkspaceScreen() {
                 icon={phone ? undefined : "site"}
               />
             </View>
+            {!phone && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open Ask Vizenta"
+                accessibilityState={{ expanded: assistantOpen }}
+                aria-expanded={assistantOpen}
+                onPress={openAssistant}
+                style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+              >
+                <BrandMark size={35} radius={9} markScale={0.72} />
+              </Pressable>
+            )}
             {!phone && (
               <IconButton
                 name="grid"
@@ -575,18 +627,7 @@ export default function WorkspaceScreen() {
               alignSelf: "center",
             }}
           >
-            <MotionView
-              testID="workspace-page-transition"
-              sceneKey={[
-                app.workspace.industry,
-                app.workspace.role,
-                app.workspace.scope,
-                page?.id,
-                location.record,
-                location.metric,
-              ].join(":")}
-              style={{ gap: 14 }}
-            >
+            <View testID="workspace-page-transition" style={{ gap: 14 }}>
               {!page ? (
                 <EmptyState
                   title="This view isn't available"
@@ -615,50 +656,56 @@ export default function WorkspaceScreen() {
                 />
               ) : (
                 <>
-                  <Row
-                    style={{
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      flexWrap: "wrap",
-                      gap: 16,
-                    }}
-                  >
-                    <View style={{ flex: 1, minWidth: 200, gap: 5 }}>
-                      <MissionLabel mission={mission} />
-                      <Row style={{ flexWrap: "wrap" }}>
-                        <Txt
-                          size={phone ? 20 : 23}
-                          bold
-                          style={{ letterSpacing: -0.6 }}
-                        >
+                  {phone && (
+                    <Row
+                      style={{
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        flexWrap: "wrap",
+                        gap: 16,
+                      }}
+                    >
+                      <View style={{ flex: 1, minWidth: 200, gap: 5 }}>
+                        <MissionLabel mission={mission} />
+                        <Row style={{ flexWrap: "wrap" }}>
+                          <Txt
+                            size={24}
+                            bold
+                            style={{ letterSpacing: -0.8, lineHeight: 29 }}
+                          >
+                            {metric
+                              ? metric.label
+                              : home
+                                ? "Workspace overview"
+                                : location.name}
+                          </Txt>
+                        </Row>
+                        <Txt size={12} color={c.muted}>
                           {metric
-                            ? metric.label
+                            ? "Understand this measure and its source context."
                             : home
-                              ? "Workspace overview"
-                              : location.name}
+                              ? "A clear picture of what matters. All in one place."
+                              : page.description}
                         </Txt>
+                      </View>
+                      <Row>
+                        <Button
+                          label="Ask Vizenta"
+                          icon="sparkle"
+                          onPress={() => open("assistant")}
+                          variant="primary"
+                          compact
+                        />
                       </Row>
-                      <Txt size={12} color={c.muted}>
-                        {metric
-                          ? "Understand this measure and its source context."
-                          : home
-                            ? "A clear picture of what matters. All in one place."
-                            : page.description}
-                      </Txt>
-                    </View>
-                    <Row>
-                      <Button
-                        label="Ask Vizenta"
-                        icon="sparkle"
-                        onPress={() => open("assistant")}
-                        variant="primary"
-                        compact={phone}
-                      />
                     </Row>
-                  </Row>
+                  )}
                   {!metric && (
                     <View
-                      style={{ borderBottomWidth: 1, borderColor: c.border }}
+                      style={{
+                        marginTop: -7,
+                        borderBottomWidth: 1,
+                        borderColor: c.border,
+                      }}
                     >
                       <ScrollView
                         horizontal
@@ -704,26 +751,6 @@ export default function WorkspaceScreen() {
                         ))}
                       </ScrollView>
                     </View>
-                  )}
-                  {!metric && !unavailable && (
-                    <MissionBoard
-                      mission={mission}
-                      scope={app.workspace.scope}
-                      count={queue.length}
-                      critical={queue.some((r) => r.state.tone === "critical")}
-                      next={
-                        queueItems(
-                          queue,
-                          page.columns.map((column) => column.id),
-                          cellText,
-                          1,
-                        )[0]
-                      }
-                      lanesFor={queue.length ? queue : filtered}
-                      metrics={pageMetrics ?? page.metrics}
-                      readinessLanes={app.workspace.role === "customer_admin"}
-                      onOpenRecord={openRecord}
-                    />
                   )}
                   {metric ? (
                     <>
@@ -1102,7 +1129,7 @@ export default function WorkspaceScreen() {
                   VIZENTA AI · Presence. Safety. Insights.
                 </Txt>
               </Row>
-            </MotionView>
+            </View>
           </ScrollView>
           {!side && (
             <Row
@@ -1152,6 +1179,52 @@ export default function WorkspaceScreen() {
             </Row>
           )}
         </View>
+        {side && assistantOpen && page && (
+          <View
+            testID="assistant-dock"
+            style={{
+              width: width >= 1500 ? 390 : 340,
+              minWidth: 0,
+              borderLeftWidth: 1,
+              borderColor: c.border,
+              backgroundColor: c.surface,
+            }}
+          >
+            <Row
+              style={{
+                height: 66,
+                paddingHorizontal: 16,
+                borderBottomWidth: 1,
+                borderColor: c.border,
+                justifyContent: "space-between",
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Txt size={15} bold color={c.link}>
+                  Ask Vizenta
+                </Txt>
+                <Txt size={10} color={c.muted} lines={1}>
+                  Conversation for this view
+                </Txt>
+              </View>
+              <IconButton
+                name="close"
+                label="Close Ask Vizenta"
+                onPress={() => setAssistantOpen(false)}
+              />
+            </Row>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{
+                padding: 16,
+                paddingBottom: 30,
+                gap: 14,
+              }}
+            >
+              <Assistant page={page} rows={rows} onOpen={openRecord} />
+            </ScrollView>
+          </View>
+        )}
       </View>
       {!!app.toast && (
         <View

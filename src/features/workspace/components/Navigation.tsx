@@ -16,9 +16,16 @@ interface Props {
   navigate: (type: "org" | "product", name: string) => void;
   open: (name: string) => void;
   collapsed?: boolean;
+  onToggle?: () => void;
 }
 
-export function Navigation({ location, navigate, open, collapsed }: Props) {
+export function Navigation({
+  location,
+  navigate,
+  open,
+  collapsed,
+  onToggle,
+}: Props) {
   const c = useTheme();
   const { workspace } = useApp();
   const industry = industries[workspace.industry];
@@ -90,13 +97,40 @@ export function Navigation({ location, navigate, open, collapsed }: Props) {
       <Row
         style={{
           height: 66,
-          paddingHorizontal: 5,
+          paddingHorizontal: collapsed ? 0 : 5,
           borderBottomWidth: 1,
           borderColor: c.sidebarLine,
-          justifyContent: collapsed ? "center" : "flex-start",
+          justifyContent: "space-between",
+          gap: collapsed ? 2 : 8,
         }}
       >
-        {collapsed ? <BrandMark size={32} /> : <BrandWordmark />}
+        {collapsed ? <BrandMark size={26} /> : <BrandWordmark />}
+        {!!onToggle && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              collapsed ? "Expand navigation" : "Collapse navigation"
+            }
+            accessibilityState={{ expanded: !collapsed }}
+            aria-expanded={!collapsed}
+            onPress={onToggle}
+            style={({ pressed, hovered }: any) => ({
+              width: collapsed ? 28 : 32,
+              height: 32,
+              borderRadius: 8,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor:
+                pressed || hovered ? c.sidebarHover : "transparent",
+            })}
+          >
+            <Icon
+              name={collapsed ? "chevron" : "back"}
+              size={collapsed ? 17 : 18}
+              color={c.sidebarIcon}
+            />
+          </Pressable>
+        )}
       </Row>
       <Pressable
         accessibilityRole="button"
@@ -120,14 +154,18 @@ export function Navigation({ location, navigate, open, collapsed }: Props) {
             <Icon name="building" size={18} color={c.sidebarIcon} />
           ) : (
             <>
-              <Txt
-                size={10}
-                color={c.sidebarMuted}
-                style={{ flex: 1, letterSpacing: 1.3 }}
-              >
-                {role.label.toUpperCase()}
-                {"\n"}WORKSPACE
-              </Txt>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Txt
+                  size={9}
+                  color={c.sidebarMuted}
+                  style={{ letterSpacing: 1.3 }}
+                >
+                  {industry.label.toUpperCase()}
+                </Txt>
+                <Txt size={11} bold color={c.sidebarText} lines={1}>
+                  {role.label} workspace
+                </Txt>
+              </View>
               <Icon name="down" size={13} color={c.sidebarMuted} />
             </>
           )}
