@@ -1,7 +1,10 @@
 import React, { useState } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useApp } from "../../../application/AppProvider";
-import { useTheme } from "../../../shared/theme/Theme";
+import {
+  useTheme,
+  type ThemeStyle,
+} from "../../../shared/theme/Theme";
 import { Txt, Button, Field } from "../../../shared/ui/Primitives";
 import { Select } from "../../../shared/ui/Select";
 import { AppLockSettings } from "../../lock/AppLockSettings";
@@ -38,6 +41,84 @@ export function Settings({
           app.update({ theme: value as "light" | "dark" | "system" })
         }
       />
+      <Txt size={12} bold>
+        Theme style
+      </Txt>
+      <Txt size={11} color={c.muted}>
+        Applies instantly. Light uses a white canvas; dark uses a black canvas.
+      </Txt>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+        {(
+          [
+            {
+              value: "signature",
+              label: "Vizenta Signature",
+              description: "Cyan and navy",
+              colors: ["#087BA8", "#0D385D", "#8F82FF"],
+            },
+            {
+              value: "cobalt",
+              label: "Electric Cobalt",
+              description: "Sharper and technical",
+              colors: ["#175CD3", "#0B1F3A", "#53B1FD"],
+            },
+            {
+              value: "teal",
+              label: "Signal Teal",
+              description: "Calm and operational",
+              colors: ["#087F70", "#0A383A", "#5FE3D1"],
+            },
+          ] as const
+        ).map((style) => {
+          const selected = app.themeStyle === style.value;
+          return (
+            <Pressable
+              key={style.value}
+              accessibilityRole="button"
+              accessibilityLabel={`Theme style: ${style.label}`}
+              accessibilityState={{ selected }}
+              onPress={() =>
+                app.update({ themeStyle: style.value as ThemeStyle })
+              }
+              style={({ pressed }) => ({
+                width: 152,
+                minHeight: 104,
+                padding: 12,
+                gap: 7,
+                borderWidth: selected ? 2 : 1,
+                borderColor: selected ? c.actionPrimary : c.border,
+                borderRadius: 12,
+                backgroundColor: pressed ? c.primarySoft : c.surface,
+                boxShadow: selected
+                  ? `0 8px 22px ${style.colors[0]}22`
+                  : "none",
+              })}
+            >
+              <View style={{ flexDirection: "row", gap: 5 }}>
+                {style.colors.map((color) => (
+                  <View
+                    key={color}
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                      backgroundColor: color,
+                      borderWidth: 1,
+                      borderColor: c.border,
+                    }}
+                  />
+                ))}
+              </View>
+              <Txt size={12} bold>
+                {style.label}
+              </Txt>
+              <Txt size={10} color={c.muted}>
+                {style.description}
+              </Txt>
+            </Pressable>
+          );
+        })}
+      </View>
       <Button
         label="Save preferences"
         variant="primary"

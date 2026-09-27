@@ -1,11 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
-import { Txt } from "../shared/ui/Primitives";
-import { useTheme } from "../shared/theme/Theme";
+import { View } from "react-native";
 import { RefreshIndicator } from "./RefreshIndicator.web";
 
-const buildId = process.env.EXPO_PUBLIC_VIZENTA_BUILD_ID;
-const baseUrl = process.env.EXPO_PUBLIC_VIZENTA_BASE_URL || "";
 const refreshKey = "_vizenta_refresh";
 
 function refresh() {
@@ -23,10 +19,8 @@ function atTop(target: HTMLElement) {
 }
 
 export function WebRefresh() {
-  const theme = useTheme();
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [updateAvailable, setUpdateAvailable] = useState(false);
   const reloadStarted = useRef(false);
   const paintFrame = useRef(0);
   const startRefresh = useCallback(() => {
@@ -46,48 +40,6 @@ export function WebRefresh() {
       url.searchParams.delete(refreshKey);
       window.history.replaceState(window.history.state, "", url.href);
     }
-    if (!buildId) return;
-    let disposed = false;
-    let pending = false;
-    const controller = new AbortController();
-    const check = async () => {
-      if (document.visibilityState !== "visible" || pending) return;
-      pending = true;
-      try {
-        const response = await fetch(
-          `${baseUrl}/version.json?t=${Date.now()}`,
-          {
-            cache: "no-store",
-            signal: controller.signal,
-          },
-        );
-        if (!response.ok) return;
-        const version = await response.json();
-        if (
-          !disposed &&
-          typeof version.id === "string" &&
-          version.id !== buildId
-        )
-          setUpdateAvailable(true);
-      } catch {
-        // Offline or mid-deployment: keep the current app usable and retry later.
-      } finally {
-        pending = false;
-      }
-    };
-    void check();
-    const interval = window.setInterval(check, 60_000);
-    window.addEventListener("focus", check);
-    window.addEventListener("online", check);
-    document.addEventListener("visibilitychange", check);
-    return () => {
-      disposed = true;
-      controller.abort();
-      clearInterval(interval);
-      window.removeEventListener("focus", check);
-      window.removeEventListener("online", check);
-      document.removeEventListener("visibilitychange", check);
-    };
   }, []);
 
   useEffect(() => {
@@ -181,21 +133,6 @@ export function WebRefresh() {
       }}
     >
       <RefreshIndicator pull={pull} refreshing={refreshing} />
-      {!pull && !refreshing && updateAvailable && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="New version available. Refresh app"
-          onPress={startRefresh}
-          style={{
-            backgroundColor: theme.actionPrimary,
-            borderRadius: 12,
-            padding: 14,
-            position: "absolute",
-          }}
-        >
-          <Txt color={theme.actionInk}>New version available · Refresh</Txt>
-        </Pressable>
-      )}
     </View>
   );
 }
