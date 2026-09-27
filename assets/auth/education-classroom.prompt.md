@@ -1,0 +1,8 @@
+# Education classroom artwork
+
+Mode: built-in image generation. Final asset: `education-classroom.png`.
+Replaces the education learning-commons image in the slideshow; fictional adults seated in a classroom.
+
+## Exact prompt
+
+Use case: ads-marketing. Asset type: original photorealistic education hero for the Vizenta AI surveillance software login slideshow. Scene: a bright contemporary classroom with three orderly rows of desks, students seated at the desks studying and listening to a lesson, open notebooks, textbooks and a few laptops. At least eight fictional adult university students, mixed men and women, casual everyday clothing, natural engaged expressions, no one standing in the foreground. Camera: slightly elevated view from near the front of the classroom looking toward the seated students, so several front faces are visible. Central foreground student seated at a desk, not a close-up portrait. Tall windows with soft daylight, pale walls, an understated modern academic environment. Premium realistic editorial photography with a cool navy #0d385d and cyan #2cb7e8 color grade, matching a modern glass lobby security photograph. Add only a few subtle thin cyan computer-vision corner brackets around three seated students, understated and clearly part of the surveillance concept. Landscape 3:2 composition, recognizable desks and seated students in the central 50 percent so the image also works as a tall portrait crop. Keep main faces in the middle vertical area; UI logo and caption will be added separately at the top and bottom. No text, identity labels, logos, numbers, dashboard graphics, buttons or watermark. Realistic anatomy, calm everyday classroom, no threatening atmosphere.

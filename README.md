@@ -1,0 +1,280 @@
+# Vizenta AI
+
+A standalone, universal customer UI for **Education, Corporate, Retail & Warehouse, and Manufacturing**. One Expo / React Native application replaces the micro-frontend composition. The original three reference folders remain unchanged.
+
+## Open the app
+
+The built preview is served at **http://localhost:8082** while the preview process is running.
+
+```powershell
+git clone https://github.com/gulshan0709/Protoype.git
+cd Protoype
+npm ci
+npm run web
+```
+
+For the production web bundle:
+
+```powershell
+npm run build:web
+npm run preview
+```
+
+Use Node 22.13+ (Node 24 was used for verification). Web hosting must serve `dist/index.html` as the SPA fallback for navigation URLs.
+
+## GitHub Pages
+
+The GitHub Pages deployment target is **https://gulshan0709.github.io/Protoype/**.
+
+In repository **Settings → Pages → Build and deployment**, set **Source** to
+**GitHub Actions**. The workflow in [.github/workflows/pages.yml](.github/workflows/pages.yml)
+installs dependencies, checks types and contracts, builds the Expo app, and deploys
+only `dist-pages`. It runs when changes reach `main`, or manually through
+**Actions → Deploy Vizenta app to GitHub Pages → Run workflow** on `main`.
+The workflow must be committed and pushed before GitHub can run it.
+
+Publishing the source branch directly can show this README instead of the app:
+GitHub's default branch build does not run the Expo export. A successful default
+Pages job therefore does not mean the application was built.
+
+To build and verify locally without publishing:
+
+```powershell
+npm run build:pages
+npm run test:pages
+```
+
+The Pages build uses the current GitHub repository name as its base path (`/Protoype`
+by default locally, or override with `VIZENTA_WEB_BASE_URL`), adjusts
+the favicon URL, and includes HTML entry points for login, signup, and password
+recovery. Standard web and native builds keep their existing configuration.
+
+The legacy `npm run deploy` command publishes to the `gh-pages` branch and is only
+for repositories configured with **Deploy from a branch → gh-pages → / (root)**.
+Use the Actions workflow for the setup described above.
+
+## Browser updates and mobile refresh
+
+Build with `npm run build:web` or `npm run build:pages`; both emit a unique
+`version.json` matching the bundled app. The browser checks it without caching on
+launch, once a minute while visible, and when returning to the tab or going online.
+A newer deployment shows **New version available · Refresh**. Refresh uses a fresh
+document URL while preserving route parameters and saved preferences.
+
+On mobile web, pull down at the top of the page and release after **Release to
+refresh** appears. Short, horizontal, cancelled, and mid-scroll gestures do not
+reload; open dialogs and form controls are excluded. Refresh follows the existing
+full-reload behavior: the demo returns to login and in-memory edits reset.
+
+The preview server prevents caching HTML/version files and caches only hashed assets
+long term. For other hosts, configure HTML and `version.json` to revalidate on every
+request; cache content-hashed assets as immutable. GitHub Pages controls its own
+cache headers, so the version check and fresh refresh URL handle updates there.
+An already-open build from before this fix needs one browser refresh to receive it.
+Run `npm run test:refresh` after a web build to verify touch and update behavior.
+
+## Login and sign-up
+
+Across the app, filled buttons use white text and icons: deeper cyan for primary and selected actions, navy for secondary actions, teal for exports, and purple for assistant actions. Shared action tokens cover hover, pressed, and disabled states in both light and dark themes; text links retain their cyan treatment.
+
+Login and sign-up preserve the fields and flows from `vizenta-ai-ui-main` in a compact navy-and-white layout. Primary actions use the workspace theme's cyan; Google and Microsoft sign-in are removed. All registration fields remain visible in the initial form, with paired password fields on wider screens and scrolling on small displays. Open `/login`, `/register`, or `/forgot-password` directly to review them. Sign-up and recovery use the explicit demo verification code `123456`; they do not send messages, create real accounts, or store passwords. Every fresh launch or reload opens the login screen, including when an older saved session had Remember me enabled. Workspace preferences and activity remain saved; the active session is kept in memory only. Run `npm run test:auth` against the preview to check these flows.
+
+The auth layout takes its visual structure from `testing/expo-app`: a full-height surveillance photograph with illustrative overlays beside a centered, branded form. The split begins at 890px; phone layouts show the photograph above the visible credentials, fading into the form. Vizenta's navy/cyan palette, white button labels, and existing fields remain in place. The login uses a fixed viewport with no scrolling in either pane; image height, spacing and landscape fields adapt to available height. Registration and recovery retain scrolling for longer forms. Run `node scripts/verify-login-fit.cjs` to check eleven viewport sizes, including the split breakpoint and validation errors.
+
+The login slideshow has four bundled industry images: Corporate, Education (seated students with all eight visible students marked), Retail, and Warehouse & Manufacturing. The logo appears on the photograph. Desktop has clickable selectors and pause/resume; selecting a slide holds it. Mobile below 890px has no slideshow buttons and rotates automatically. Images crossfade every four seconds after loading; rotation pauses in the background and respects reduced motion. Desktop also pauses on hover or keyboard focus. Changing slides preserves the form. Run `npm run test:showcase` to verify this behavior. Final image paths and built-in image-generation prompts are recorded in [assets/auth/use-case-artwork.md](assets/auth/use-case-artwork.md).
+
+## Motion
+
+The app follows the testing reference's motion approach: a branded startup reveal, short page and auth-step entrances, and animated dialog panels. System reduced-motion preferences disable the movement. Navigation does not wait for animations, and form state is preserved. See [shared motion](src/shared/motion/README.md); run `npm run test:motion` for launch, navigation, dialog, and accessibility checks.
+
+## Priority layer
+
+This follows the development package's 22 September priority update. Each of the 29 personas has a mission, defined in `src/domain/contracts/priority.ts`: Security Response, Presence & Automation, Combined Operations or Platform Administration. InfoSec/Audit uses Governance & Evidence.
+
+- A small mission label sits above each page title.
+- List pages open with a slim focus bar: the mission headline and description, how many records in the view need action, and a Next button that opens the most urgent one (critical first). Customer Admin sees two readiness lanes instead, Security readiness and Presence & integration, each opening its highest blocker.
+- One KPI leads: the first critical one, otherwise the first needing attention, otherwise the first. It moves to the front, gets a "Priority ·" prefix and the mission accent, and spans the first row on phones.
+- Security personas, except the Warden, see Safety products before Presence in the sidebar, Explore and search.
+- Evidence and source panels have a +/− toggle. They start collapsed for operators unless a page source needs attention. Customer Admin and Vizenta Admin see them open.
+- Record details open with a decision bar: current state, owner (or scope) and source confidence, with the record's actions beside them.
+- The workspace picker labels role selection as a design-review preview.
+
+The mission accents are theme tokens (`missionSecurity`, `missionAutomation`, `missionCombined`, `missionPlatform`) with light and dark values; see the [theme reference](src/shared/theme/README.md). `tests/priority.test.cjs` covers the profiles and rules.
+
+## Native
+
+```powershell
+npm start
+npm run android
+```
+
+Connect a compatible Expo Go / development client, or launch an Android emulator. On a Mac with Xcode, use `npm run ios`. This project uses Expo SDK 57 and React Native 0.86, matching `testing/expo-app`; see the [versioned Expo reference](https://docs.expo.dev/versions/v57.0.0/).
+
+```powershell
+npm run build:native
+```
+
+This command exports the iOS and Android JavaScript/Hermes bundles. It does **not** create signed APK/IPA packages or establish native device runtime coverage. Store credentials and signing are not configured. The new placeholder application identifier is `ai.vizenta.workspace`.
+
+### Android APK for sideloading
+
+`npx expo prebuild --platform android` generates the ignored `android/` project
+from `app.json`, including the navy launcher icon, adaptive icon and splash from
+`assets/app/`. Build with JDK 17 and the Android SDK:
+
+```powershell
+$env:JAVA_HOME = "$env:LOCALAPPDATA\Android\jdk17"
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+cd android; .\gradlew.bat assembleRelease
+```
+
+The APK is written to `android/app/build/outputs/apk/release/app-release.apk`.
+Setting `reactNativeArchitectures=armeabi-v7a,arm64-v8a` in
+`android/gradle.properties` covers physical phones and shortens the build.
+
+On Windows, gesture-handler codegen object paths exceed 260 characters.
+`plugins/withWindowsCmakePaths.js` lets CMake hash long object paths, but that
+only fits from a short root. Map the parent folder, for example
+`subst V: C:\Users\<you>\Desktop\vizenta`, and build from `V:\vizenta-ai\android`.
+Do not map the project folder itself to a drive root: Expo autolinking cannot
+find `package.json` at a drive root.
+
+The release build is signed with the generated debug keystore. It installs on
+any device that allows unknown apps, but it cannot be published to Play and a
+build signed with a different key cannot update it in place.
+
+## App lock
+
+Settings → App lock (Android and iOS) adds a 4-digit PIN, with optional face or
+fingerprint unlock when the device has one enrolled. The lock appears when a
+signed-in user returns after the chosen time away (immediately, 30 seconds,
+1 minute or 5 minutes; default 1 minute) and covers any open dialog. Android
+Back cannot dismiss it. Biometrics are offered automatically, and the PIN is
+always the fallback; the device passcode is not accepted.
+
+The PIN is stored only as a salted SHA-256 digest in the platform keystore via
+`expo-secure-store`, separately from the AsyncStorage preferences. Five wrong
+PINs start a 30-second wait that doubles with each further five, up to 15
+minutes, and survives restarts. **Forgot PIN? Sign out** removes the lock and
+returns to login. Changing the PIN or turning the lock off requires the current
+PIN; turning biometrics on first requires a successful scan. A fresh launch
+still opens login, so the lock applies only to returning to a signed-in session.
+On web, Settings explains that app lock is available in the mobile apps.
+Lock rules are unit tested in `tests/app-lock.test.cjs`.
+
+## What is implemented
+
+Class and lab setup is available under **Class & Lab Attendance** for Customer
+Admin (Coverage) and Dean/Coordinator (Classes and Labs). Use **Add** or **Bulk
+upload** above the table. Each row's actions offer **Learners**, **Edit**, and
+**Delete**. CSV upload includes class/lab templates, validation and duplicate
+review; learner actions support mapping, removal and CSV export. These controls
+use the existing theme, forms, dialogs, tables and column preferences.
+
+Class/lab changes and learner mappings stay in memory for the current app session.
+They survive navigation, are isolated by role/page and assigned scope, and reset
+on reload. Existing attendance and camera measurements remain source snapshots.
+No class or SIS backend is connected. Run `npm run test:class-setup` against the
+local app to check creation, upload, edit/delete, learners, scopes and mobile/dark
+layouts; `VIZENTA_QA_URL` overrides the default `http://localhost:8083`.
+
+**Session attendance.** Open any class or lab session to see its attendance: Class
+& Lab Attendance → Classes or Labs (Dean, Coordinator, Faculty), Faculty → Today, or
+Customer Admin → Coverage. The data points follow skillatracker-ui-demo's class
+attendance view (`Attendanceview.jsx`). The detail lists every mapped learner with:
+- profile image, UID and email
+- status (Present, Late, Needs review, Absent, or Scheduled before the session starts)
+- type (Auto from cameras, Manual when marked by staff)
+- first and last image captured time, duration and match confidence
+- the attendance image; tap it for the full frame with its detection box
+- the recording, played in a dialog
+
+**Mark attendance** toggles a learner between present and absent after confirmation,
+with an optional reason. Marks are kept for the session.
+
+A **Session date** picker shows the four previous class days, each with its own
+seeded attendance. **View images** opens a gallery of every capture.
+**Consolidated report** shows each learner's term attendance (18 sessions) and
+flags learners below 75%. **Export** writes the legacy CSV columns.
+
+Tiles and a bar summarise attended, rate, on time, late, review and absent. Filter
+chips, name/UID search and 12 learners per page are included; phones show cards. The counts come from the row itself
+("59 / 68", "3 low confidence", "28 now"). Rows without a count (Faculty's timetable,
+the admin's coverage view) borrow the count of the same class from Classes or Labs.
+Learner assignment is seeded by class and start time, so the Dean, Coordinator and
+Faculty views of one session show the same learners present
+(`src/domain/classes/attendance.ts`, `tests/class-attendance.test.cjs`).
+
+- Four industry workspaces; all 29 supplied roles; 752 base role/page contracts with Store/Warehouse variants. The supplied 894 review configurations can be traversed through the same application shell.
+- Persona-specific Organization navigation and entitled Presence, Safety and Insights products. Store location managers do not receive Guard navigation. Security personas see Safety before Presence (see [Priority layer](#priority-layer)).
+- Desktop sidebar, collapsible navigation, tablet/phone bottom navigation, phone record cards, responsive tables and full record detail pages.
+- Industry and demo-role switching, assigned-scope selection, native/web history navigation and direct links to tabs, records and KPI details.
+- KPI details show scope, page, time window and calculation, then Supporting data with each source's value, status and decision impact. Manufacturing contracts supply the window and calculation; other industries show "Current page window" and "Defined by this page contract".
+- Search across entitled, scoped pages; in-page search, status and contract filters, table sorting and pagination.
+- Record facts, source-impact panels, source history, permitted actions, required notes, owner entry for assignment and local audit history.
+- Local sample lifecycle transitions for acknowledge, assign, escalate, resolve and visitor checkout. Completed workflows hide further transition controls. Unavailable source states stay unavailable.
+- CSV export on web. Native export opens the platform share sheet with CSV text.
+- Scoped, deterministic assistant summaries and source answers; notification review; read state; settings; light/dark/system appearance; demo login/sign-out.
+- Explicit populated, empty/filter-empty, degraded, unavailable, not-configured, unauthorized and insufficient-history review states under Settings → Review tools.
+- Preferences, workspace, review notes, lifecycle history and notification read state persist on the current device using AsyncStorage.
+
+## Try an end-to-end flow
+
+1. Open the Education customer workspace and select **North Campus** in the readiness table.
+2. Review its facts and source context. Choose **Open record**, enter a review note, and save it.
+3. Reload: the local activity trail is retained. Return to records and export the filtered view.
+4. Open the organization selector and try a security role to explore Shield lifecycle actions, or a Faculty role to see academic-only access.
+5. Switch industries to inspect the distinct Corporate, Retail/Warehouse and Manufacturing schemas. For Retail's Location Manager, switch between Store 018 and Warehouse DC-2.
+6. Resize the browser to a phone width, or launch the native bundle. Use Explore to navigate all entitled products.
+
+## Architecture and references
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for module boundaries, integration seams, and the migration mapping.
+
+`npm run contracts:import` reimports the provided development package into static JSON. It evaluates only the local reference data modules at build time. The shipped app uses React Native components and does not embed the HTML prototypes, use iframes/WebViews, or load federation remotes.
+
+The reference datasets remain separate by industry. Their stable record IDs, role-specific columns, scope tags, details, sources, action declarations and calculation context are preserved.
+
+## Checks
+
+```powershell
+npm run typecheck
+npm test
+npm run build:web
+npm run build:native
+# With npm run preview running in another terminal:
+npm run test:ui
+npm run test:coverage
+```
+
+Browser checks use installed Google Chrome through Playwright. Outputs and screenshots are in [qa/](qa/). `VIZENTA_QA_URL` can point the checks at a different preview origin.
+
+### Table alignment
+
+Records tables build the header and every row from one set of column rules. Status and trailing action columns get one width for the whole table (the widest pill, up to 220 px, and the widest row action). Rows without an action leave that column empty, so their cells stay under the headers. All header labels are uppercase with the same style. With the app running, `npm run test:tables` opens representative tables at 1512, 1280, 1024 and 800 px and in the 390 px card layout. These include Gate → User Attendance (with pages that mix present and absent rows), Gate → In/Out, Class & Lab, Warden leave, People & Access, and a table from each other industry. For every visible row it checks that each cell's left edge is within 2 px of its header's, that cells don't overflow, that status pills aren't truncated and that headers match. It saves screenshots and `results.json` to `qa/tables/` and exits non-zero on a mismatch. Add `-- --all` to also crawl every tab for each industry's Customer Admin, and `--shots` to capture each of those tables.
+
+## Service integration boundary
+
+This is an interactive frontend with fictional reference data and device-local persistence. No production authentication, backend, real camera feed, payroll connector, external notification delivery, or generative AI service is connected. Demo roles are deliberately selectable; a production identity service must supply access and enforce authorization server-side.
+
+Only the implemented local lifecycle actions change sample workflow state. Configuration, policy, operational and other actions collect auditable review requests; they do not claim to change a live service. Authored aggregate KPIs remain source snapshots and are not recalculated from three-row samples or local actions. The assistant explicitly identifies its sample-data scope.
+
+The build currently bundles the complete review fixture corpus to make every reference flow available offline. Replace it with scoped, paginated API responses before production deployment; the complete fixture bundle is not a production data-loading strategy.
+
+Learner management follows the same session-based flow: Customer Admin > Class & Lab Attendance > Learners (also available to Dean and Coordinator). Add, edit, delete, or bulk upload a CSV using the downloadable template. Existing UIDs and invalid rows must be corrected; duplicate CSV rows are skipped. Source attendance values are preserved when editing learner identity.
+
+Customer Admin camera management is available in Class & Lab Attendance > Sources and Gate > Cameras. Add one or more cameras per location, edit configuration, or confirm deletion. Changes remain in the session; live camera health is preserved and credentials are excluded from table and detail views.
+
+Surveillance Users is available under Organization for Vizenta Admin and Customer Admin. Add, edit, delete or CSV-import Identified, Threat and Visitor users, with profile images and visitor validity dates. Duplicate UIDs/emails are blocked. Counts reflect session records in the selected customer or campus; the recognition service is not connected.
+
+The Warden product is available to Customer Admin and Vizenta Admin with Wardens, Hostels and Leave Management tabs. Add/edit/delete records, assign wardens and hostels, configure sub-admin permissions, and create or update pending leave. Changes stay in the session; permissions describe configuration and do not create login accounts.
+
+Customer Admin Sources & Setup includes module/notification/retention settings, camera setup, shifts, camera criteria, a camera dashboard, surveillance attendance and video references. Settings are scoped to the current workspace and retained for the session. Camera and shift records support add/edit/delete. Video references only play when a recording service supplies media.
+
+Demo data is completed by src/domain/contracts/demoData.ts after the reference contracts load. All four industries retain their operational scenarios. Education adds configured camera connections, shifts, warden contacts and hostel assignments, class rosters, surveillance contact details and matching camera recognitions. Setup opens with configured service, notification, retention and camera-quality values. The demo-data test checks every table (including retail variants), management form validity and cross-record assignments.
+
+Demo volume. The reference pages ship three to nine rows, so src/domain/contracts/demoVolume.ts fills operational lists (people, attendance, movements, cases, cameras, exceptions) to 24–30 rows when a page is first opened. Each new row is derived from an authored row and keeps that row's state, detail story and actions. It changes its identity consistently across cells, detail and setup forms: people (same gender and naming style), IDs and room/lane/dock numbers, counts, event times, percentages and the assigned scope (rows are spread across the persona's campuses, stores or plants). Seeds are fixed, so reloads, deep links and audit keys see the same rows. Filterable codes (policy versions, scopes) never change. Templates are weighted towards healthy states and capped at their fair share, so exceptions stay the minority. Catalog tabs (reports, policies, rules, saved views) gain at most two rows. Structural lists (campuses, plants, hostels, customers) and one person's timetable stay as authored. Education's cross-linked setup pages (wardens/hostels, camera setup, surveillance users and recognitions, shifts) are also left as authored. Placeholder contacts are replaced everywhere: `@example.com` becomes the tenant domain, `98765…` phones become realistic mobile numbers and 192.0.2.x cameras move to 10.24.x.x. Retail wording copied from the Education reference ("Faculty", "Academic", "vendor 208 vendor") is corrected. Corporate pages replace the reference's generic one-row-per-site placeholders with authored rows from src/domain/contracts/corporate/rows-*.json (see corporateDemo.ts); each persona sees the rows inside its site, lobby, company, region or customer assignment. KPIs remain authored snapshots and are not recalculated from rows. `tests/demo-volume.test.cjs` checks counts, uniqueness, persona scopes, determinism, in-row consistency and setup-form validity.
+
+Person portraits. Wherever a person's name appears, the app shows one standard chip from src/features/workspace/components/PersonChip.tsx: a round portrait, the name in bold and a muted "UID: …" line when there is one. That covers table and card cells in any column, detail headers, facts, section items and timeline actors, class attendance, learner and surveillance-user forms, search results, notifications and the header profile button. Sizes are 38 dp in tables, cards, lists and dialogs, 72 in the detail header, 56 in form previews and 28 for timeline actors. `parsePersonName` (src/shared/people/personName.ts) decides what is a person: a known first name, or an initial such as "K. Nair", plus a surname. Organisations, roles, places and shifts stay plain text. Portraits come from a pool of 144 professional headshots in assets/profiles/people/: 48 South Asian women, 48 South Asian men, 24 international women and 24 international men. Each is a 1080 × 1080 JPEG with a 256 × 256 thumbnail, which avatars up to 96 dp use. Names from the Indian pools get a South Asian portrait. `npm run portraits:assign` scans every page, class session and sample set in all four industries and colours the co-occurrence graph, so a person keeps the same portrait everywhere and no page shows two people with the same face. The result is written to src/shared/people/portraitAssignments.json. People added during a session get a stable portrait from their group, and uploaded photos always win. `tests/portraits.test.cjs` checks detection, coverage, page distinctness and that the assignments are current. With the app running, `npm run test:portraits` checks the rendered avatars. Sources and credits are in assets/profiles/README.md.
+
+In/Out, Gate User Attendance and Shield recognition views include profile/capture images. Shield Video Analytics and the Surveillance Dashboard play local H.264 recordings with standard controls; clicking a capture opens an image preview. On Android and iOS the capture shows a play button, and tapping it plays the clip in place through `expo-video` with native controls and fullscreen. A player is created only after Play, so camera lists stay light. Media behavior follows skillatracker-ui-demo; that project retrieves recordings from APIs, so the app bundles HD demo footage and stills (see assets/media/README.md). Each person's capture is one of 15 HD stills, picked from their UID (else name), so a person shows the same still in the table, the preview and the record detail. Men and women (by first name, as for profile photos) get a still of a man or a woman. The whole frame is shown, with the detection box and label drawn over it in the classification colour; table thumbnails crop around the box. With the app running, `node scripts/verify-demo-media.cjs` checks this and saves `qa/media-*.png`. No streaming service is contacted.
