@@ -17,7 +17,7 @@ export function AuthUseCaseSelector({
   return (
     <View
       accessibilityRole="toolbar"
-      accessibilityLabel="Preview an industry"
+      accessibilityLabel="Preview a solution"
       style={s.row}
     >
       {authUseCases.map((slide) => {

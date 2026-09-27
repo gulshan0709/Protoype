@@ -9,8 +9,8 @@ import {
 
 export function useAuthShowcase(mobile: boolean) {
   const reduced = useReducedMotion();
-  const [selected, setSelected] = useState<AuthUseCaseId>("corporate");
-  const [requested, setRequested] = useState<AuthUseCaseId>("corporate");
+  const [selected, setSelected] = useState<AuthUseCaseId>("enterprise");
+  const [requested, setRequested] = useState<AuthUseCaseId>("enterprise");
   const [loaded, setLoaded] = useState<Partial<Record<AuthUseCaseId, boolean>>>(
     {},
   );

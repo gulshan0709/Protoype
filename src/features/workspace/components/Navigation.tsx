@@ -10,6 +10,10 @@ import {
   familyOrder,
 } from "../../../domain/contracts/priority";
 import type { Location } from "../../../domain/contracts/types";
+import {
+  productIcon,
+  workspaceEyebrow,
+} from "../../../domain/contracts/experience";
 import { useTheme } from "../../../shared/theme/Theme";
 import { BrandMark, BrandWordmark, Icon } from "../../../shared/ui/Icon";
 import { Row, Txt } from "../../../shared/ui/Primitives";
@@ -163,7 +167,7 @@ export function Navigation({
                   color={c.sidebarMuted}
                   style={{ letterSpacing: 1.3 }}
                 >
-                  {industry.label.toUpperCase()}
+                  {workspaceEyebrow(workspace.industry)}
                 </Txt>
                 <Txt size={11} bold color={c.sidebarText} lines={1}>
                   {canonicalRoleFor(workspace.role)} workspace
@@ -213,7 +217,15 @@ export function Navigation({
                 )}
               </Row>
               {products.map((p) =>
-                item(p, industry.core.productFamilies[p].icon, "product"),
+                item(
+                  p,
+                  productIcon(
+                    workspace.industry,
+                    p,
+                    industry.core.productFamilies[p].icon,
+                  ),
+                  "product",
+                ),
               )}
             </View>
           );

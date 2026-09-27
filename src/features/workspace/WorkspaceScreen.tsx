@@ -60,6 +60,7 @@ import {
   showHomeMetric,
 } from "../../domain/contracts/priority";
 import { localRecord } from "../../domain/contracts/lifecycle";
+import { pageDescription } from "../../domain/contracts/experience";
 import type {
   Location,
   DataRecord,
@@ -322,7 +323,12 @@ export default function WorkspaceScreen() {
       ? [roleName, app.workspace.scope, page?.window]
           .filter(Boolean)
           .join(" · ")
-      : page?.description;
+      : pageDescription(
+          app.workspace.industry,
+          location.type,
+          location.name,
+          page?.description,
+        );
   const phone = width < 768;
   const side = width >= 1024;
   const wide = width > 1050;

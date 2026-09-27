@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Pressable, View } from "react-native";
 import { useApp } from "../../../application/AppProvider";
 import { industries } from "../../../domain/contracts/registry";
+import { workspaceRoleLabel } from "../../../domain/contracts/experience";
 import type { PageContract, DataRecord } from "../../../domain/contracts/types";
 import { cellText } from "../../../domain/contracts/logic";
 import { useTheme } from "../../../shared/theme/Theme";
@@ -76,8 +77,11 @@ export function Assistant({
         </View>
       </Row>
       <Txt size={12} color={c.muted}>
-        {industries[workspace.industry].core.roles[workspace.role].label} ·{" "}
-        {workspace.scope}
+        {workspaceRoleLabel(
+          workspace.role,
+          industries[workspace.industry].core.roles[workspace.role].label,
+        )}{" "}
+        · {workspace.scope}
       </Txt>
       <View style={{ gap: 8 }}>
         {[
