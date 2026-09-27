@@ -5,7 +5,10 @@ import {
   industries,
   visibleProducts,
 } from "../../../domain/contracts/registry";
-import { familyOrder } from "../../../domain/contracts/priority";
+import {
+  canonicalRoleFor,
+  familyOrder,
+} from "../../../domain/contracts/priority";
 import type { Location } from "../../../domain/contracts/types";
 import { useTheme } from "../../../shared/theme/Theme";
 import { BrandMark, BrandWordmark, Icon } from "../../../shared/ui/Icon";
@@ -163,7 +166,7 @@ export function Navigation({
                   {industry.label.toUpperCase()}
                 </Txt>
                 <Txt size={11} bold color={c.sidebarText} lines={1}>
-                  {role.label} workspace
+                  {canonicalRoleFor(workspace.role)} workspace
                 </Txt>
               </View>
               <Icon name="down" size={13} color={c.sidebarMuted} />

@@ -105,7 +105,10 @@ const types = {
     assert.equal((await page.goto(base + "/login/")).status(), 200);
     await ready();
     await button("Explore workspace").click();
-    await page.getByText("Workspace overview", { exact: true }).waitFor();
+    await page
+      .getByText("Customer Readiness", { exact: true })
+      .first()
+      .waitFor();
     assert.ok(page.url().startsWith(base + "/"));
     assert.equal((await page.reload()).status(), 200);
     await ready();

@@ -41,7 +41,7 @@ import { ColumnPicker } from "./ColumnPicker";
 // row has a trailing action.
 const TABLE_PAD = 12;
 const TABLE_GAP = 10;
-const CHEVRON_WIDTH = 16;
+const VIEW_WIDTH = 46;
 const STATUS_MIN = 116;
 const STATUS_MAX = 220;
 const ACTIONS_MIN = 35;
@@ -154,6 +154,9 @@ export function Records({
   const [statusWidth, measureStatus] = useFitWidth(STATUS_MIN, STATUS_MAX);
   const [actionsWidth, measureActions] = useFitWidth(ACTIONS_MIN, 320);
   const hasCapture = columns.some((col) => col.id === "capture");
+  const [headingContext, headingTitle] = page.heading.includes(" · ")
+    ? page.heading.split(/ · (.*)/s).slice(0, 2)
+    : [undefined, page.heading];
   // Person chips of the visible rows: the row's identity (or a first cell
   // naming a person) and every other cell naming someone else. Sorting,
   // filtering and search keep using the cell data.
@@ -288,8 +291,13 @@ export function Records({
             gap: 4,
           }}
         >
-          <Txt size={15} bold>
-            {page.heading}
+          {!!headingContext && (
+            <Txt size={10} bold color={c.link} style={{ letterSpacing: 1.1 }}>
+              {headingContext.toUpperCase()}
+            </Txt>
+          )}
+          <Txt size={17} bold>
+            {headingTitle}
           </Txt>
           {!!headingSubtitle && (
             <Txt size={12} color={c.muted}>
@@ -444,7 +452,7 @@ export function Records({
                   {showStatus && (
                     <Badge label={row.state.label} tone={row.state.tone} />
                   )}
-                  <Icon name="chevron" size={16} />
+                  <Icon name="eye" size={18} color={c.link} />
                 </Row>
                 {columns.length > 1 && (
                   // Label and value share one centred row, so media thumbnails
@@ -458,7 +466,10 @@ export function Records({
                     }}
                   >
                     {columns.slice(1).map((col) => (
-                      <Row key={col.id} style={{ alignItems: "center", gap: 12 }}>
+                      <Row
+                        key={col.id}
+                        style={{ alignItems: "center", gap: 12 }}
+                      >
                         <Txt
                           size={10}
                           bold
@@ -483,7 +494,10 @@ export function Records({
                             />
                           </View>
                         ) : (
-                          <Txt size={12} style={{ flex: 1.4, textAlign: "right" }}>
+                          <Txt
+                            size={12}
+                            style={{ flex: 1.4, textAlign: "right" }}
+                          >
                             {cellText(row.cells[col.id])}
                           </Txt>
                         )}
@@ -513,7 +527,7 @@ export function Records({
                 360,
                 columns.length * 140 +
                   (showStatus ? statusWidth + TABLE_GAP : 0) +
-                  CHEVRON_WIDTH +
+                  VIEW_WIDTH +
                   TABLE_PAD * 2 +
                   (hasActions ? actionsWidth + TABLE_GAP : 0),
               ),
@@ -587,8 +601,12 @@ export function Records({
               )}
               <View
                 testID="records-head-cell-chevron"
-                style={{ width: CHEVRON_WIDTH }}
-              />
+                style={{ width: VIEW_WIDTH, alignItems: "center" }}
+              >
+                <Txt size={11} bold color={c.muted}>
+                  VIEW
+                </Txt>
+              </View>
               {hasActions && (
                 <View
                   testID="records-head-cell-actions"
@@ -693,9 +711,9 @@ export function Records({
                   )}
                   <View
                     testID="records-cell-chevron"
-                    style={{ width: CHEVRON_WIDTH, alignItems: "center" }}
+                    style={{ width: VIEW_WIDTH, alignItems: "center" }}
                   >
-                    <Icon name="chevron" size={15} />
+                    <Icon name="eye" size={17} color={c.link} />
                   </View>
                 </Pressable>
                 {hasActions && (

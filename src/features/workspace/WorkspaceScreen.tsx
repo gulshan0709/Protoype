@@ -52,8 +52,12 @@ import {
 } from "../../domain/contracts/logic";
 import {
   actionQueue,
+  canonicalRoleFor,
   evidenceStartsCollapsed,
+  homeMetricLabel,
   missionFor,
+  queueItems,
+  showHomeMetric,
 } from "../../domain/contracts/priority";
 import { localRecord } from "../../domain/contracts/lifecycle";
 import type {
@@ -81,7 +85,7 @@ import { Navigation } from "./components/Navigation";
 import { Metrics } from "./components/Metrics";
 import { Records } from "./components/Records";
 import { ContextPanels } from "./components/ContextPanels";
-import { MissionLabel } from "./components/Priority";
+import { MissionBoard, MissionLabel } from "./components/Priority";
 import { RecordDetail } from "./components/RecordDetail";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { Assistant } from "./components/Assistant";
@@ -137,6 +141,7 @@ export default function WorkspaceScreen() {
   const industry = industries[app.workspace.industry];
   const role = industry.core.roles[app.workspace.role];
   const mission = missionFor(app.workspace.industry, app.workspace.role);
+  const roleName = canonicalRoleFor(app.workspace.role);
   const location: Location = params.name
     ? {
         type: params.type === "product" ? "product" : "org",
@@ -297,6 +302,27 @@ export default function WorkspaceScreen() {
     location.name === role.home &&
     !record &&
     !metric;
+  const availableMetrics = pageMetrics ?? page?.metrics ?? [];
+  const shownMetrics = home
+    ? availableMetrics.filter((m) =>
+        showHomeMetric(
+          m.label,
+          m.valuesByScope?.[app.workspace.scope] ?? m.value,
+        ),
+      )
+    : availableMetrics;
+  const pageTitle = metric
+    ? homeMetricLabel(app.workspace.role, metric.label)
+    : home
+      ? role.home
+      : location.name;
+  const pageSubtitle = metric
+    ? `Metric detail · ${roleName} · ${app.workspace.scope}`
+    : home
+      ? [roleName, app.workspace.scope, page?.window]
+          .filter(Boolean)
+          .join(" · ")
+      : page?.description;
   const phone = width < 768;
   const side = width >= 1024;
   const wide = width > 1050;
@@ -422,6 +448,13 @@ export default function WorkspaceScreen() {
   const exportRows = exportRecord ? [exportRecord] : filtered;
   const unavailable = preview !== "populated" && preview !== "degraded";
   const queue = actionQueue(filtered);
+  const focusItems = page
+    ? queueItems(
+        queue,
+        page.columns.map((column) => column.id),
+        cellText,
+      )
+    : [];
   return (
     <View
       style={{
@@ -488,42 +521,41 @@ export default function WorkspaceScreen() {
                   lines={1}
                   style={{ letterSpacing: -0.4 }}
                 >
-                  {metric
-                    ? metric.label
-                    : home
-                      ? "Workspace overview"
-                      : location.name}
+                  {pageTitle}
                 </Txt>
                 <Txt size={11} color={c.muted} lines={1}>
-                  {metric
-                    ? "Understand this measure and its source context."
-                    : home
-                      ? "A clear picture of what matters. All in one place."
-                      : page?.description}
+                  {pageSubtitle}
                 </Txt>
               </View>
             )}
-            {!phone && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Search workspace"
-                onPress={() => open("search")}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 10,
-                  backgroundColor: c.background,
-                  borderRadius: 8,
-                  padding: 11,
-                  width: width > 1300 ? 230 : 170,
-                }}
-              >
-                <Icon name="search" size={16} />
-                <Txt size={11} color={c.subtle}>
-                  Search workspace
-                </Txt>
-              </Pressable>
-            )}
+            {!phone &&
+              (width >= 1180 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Search workspace"
+                  onPress={() => open("search")}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    backgroundColor: c.background,
+                    borderRadius: 8,
+                    padding: 11,
+                    width: width > 1300 ? 230 : 185,
+                  }}
+                >
+                  <Icon name="search" size={16} />
+                  <Txt size={11} color={c.subtle}>
+                    Search workspace
+                  </Txt>
+                </Pressable>
+              ) : (
+                <IconButton
+                  name="search"
+                  label="Search workspace"
+                  onPress={() => open("search")}
+                />
+              ))}
             <View style={{ flex: phone ? 1 : undefined, minWidth: 0 }}>
               <Select
                 compact
@@ -578,7 +610,7 @@ export default function WorkspaceScreen() {
                 />
               )}
             </View>
-            {!phone && (
+            {width >= 1180 && (
               <IconButton
                 name="help"
                 label="Help center"
@@ -673,19 +705,11 @@ export default function WorkspaceScreen() {
                             bold
                             style={{ letterSpacing: -0.8, lineHeight: 29 }}
                           >
-                            {metric
-                              ? metric.label
-                              : home
-                                ? "Workspace overview"
-                                : location.name}
+                            {pageTitle}
                           </Txt>
                         </Row>
                         <Txt size={12} color={c.muted}>
-                          {metric
-                            ? "Understand this measure and its source context."
-                            : home
-                              ? "A clear picture of what matters. All in one place."
-                              : page.description}
+                          {pageSubtitle}
                         </Txt>
                       </View>
                       <Row>
@@ -837,25 +861,53 @@ export default function WorkspaceScreen() {
                         ))}
                       </Card>
                     </>
-                  ) : !(pageMetrics ?? page.metrics).length ? null : (
-                    <Metrics
-                      metrics={
-                        preview === "populated"
-                          ? (pageMetrics ?? page.metrics)
-                          : (pageMetrics ?? page.metrics).map((m) => ({
-                              ...m,
-                              value: "—",
-                              valuesByScope: undefined,
-                              contextsByScope: undefined,
-                              context: "Unavailable in this review state",
-                              tone: "unavailable" as const,
-                            }))
-                      }
-                      scope={app.workspace.scope}
-                      narrow={phone}
-                      accent={missionColor(c, mission.family)}
-                      onPress={(m) => go({ ...location, metric: m.label })}
-                    />
+                  ) : !shownMetrics.length ? null : (
+                    <>
+                      {home && preview === "populated" && rows.length > 0 && (
+                        <MissionBoard
+                          mission={mission}
+                          scope={app.workspace.scope}
+                          count={queue.length}
+                          critical={queue.some(
+                            (item) => item.state.tone === "critical",
+                          )}
+                          next={focusItems[0]}
+                          lanesFor={(queue.length ? queue : filtered).slice(
+                            0,
+                            2,
+                          )}
+                          metrics={shownMetrics}
+                          readinessLanes={
+                            app.workspace.role === "customer_admin"
+                          }
+                          onOpenRecord={openRecord}
+                        />
+                      )}
+                      <Metrics
+                        metrics={
+                          preview === "populated"
+                            ? shownMetrics
+                            : shownMetrics.map((m) => ({
+                                ...m,
+                                value: "—",
+                                valuesByScope: undefined,
+                                contextsByScope: undefined,
+                                context: "Unavailable in this review state",
+                                tone: "unavailable" as const,
+                              }))
+                        }
+                        scope={app.workspace.scope}
+                        narrow={phone}
+                        accent={missionColor(c, mission.family)}
+                        labelFor={
+                          home
+                            ? (m) =>
+                                homeMetricLabel(app.workspace.role, m.label)
+                            : undefined
+                        }
+                        onPress={(m) => go({ ...location, metric: m.label })}
+                      />
+                    </>
                   )}
                   {preview !== "populated" && (
                     <Card
@@ -986,7 +1038,7 @@ export default function WorkspaceScreen() {
                         )}
                         <Records
                           key={page.id}
-                          headingSubtitle={`${role.label} · ${app.workspace.scope}`}
+                          headingSubtitle={`${roleName} · ${app.workspace.scope}`}
                           headingActions={
                             classKinds.length > 0 ? (
                               <Row style={{ flexWrap: "wrap", gap: 8 }}>
@@ -1131,7 +1183,7 @@ export default function WorkspaceScreen() {
               </Row>
             </View>
           </ScrollView>
-          {!side && (
+          {phone && (
             <Row
               style={{
                 height: 65,
@@ -1231,7 +1283,7 @@ export default function WorkspaceScreen() {
           accessibilityRole="alert"
           style={{
             position: "absolute",
-            bottom: side ? 24 : 80,
+            bottom: phone ? 80 : 24,
             left: phone ? 18 : undefined,
             right: phone ? 18 : 30,
             backgroundColor: c.ink,
@@ -1332,7 +1384,7 @@ export default function WorkspaceScreen() {
                 placeholder="Try a campus, person, incident or reference…"
               />
               <Txt size={12} color={c.muted}>
-                Results are limited to {role.label} · {app.workspace.scope}.
+                Results are limited to {roleName} · {app.workspace.scope}.
               </Txt>
               {search.length < 2 ? (
                 <Txt color={c.muted}>

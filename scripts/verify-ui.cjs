@@ -21,7 +21,7 @@ fs.mkdirSync(output, { recursive: true });
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(process.env.VIZENTA_QA_URL || "http://127.0.0.1:8082");
   await enterWorkspace();
-  await page.getByText("Workspace overview", { exact: true }).waitFor();
+  await page.getByText("Customer Readiness", { exact: true }).first().waitFor();
   await page.getByTestId("launch-screen").waitFor({ state: "detached" });
   assert.equal(
     await page
@@ -116,7 +116,7 @@ fs.mkdirSync(output, { recursive: true });
     .click();
   await page
     .getByRole("button", {
-      name: "Explore Plant readiness requiring action",
+      name: "Explore Blocking issues",
       exact: true,
     })
     .waitFor();
@@ -199,11 +199,9 @@ fs.mkdirSync(output, { recursive: true });
       ),
     workspace,
   );
-  const data = require("../src/domain/contracts/data/corporate.json");
-  const contract = data.pages[workspace.role].product.Shield.Command;
-  const rec = contract.records.find((r) =>
-    r.detail.permittedActions.some((a) => a.id === "resolve"),
-  );
+  const contract = require("../src/domain/contracts/data/corporate.json").pages[
+    workspace.role
+  ].product.Shield.Command;
   await page.goto(
     (process.env.VIZENTA_QA_URL || "http://127.0.0.1:8082") +
       "/?" +
@@ -211,10 +209,15 @@ fs.mkdirSync(output, { recursive: true });
         type: "product",
         name: "Shield",
         tab: "Command",
-        record: rec.id,
       }),
   );
   await enterWorkspace();
+  await page
+    .getByTestId("records-row")
+    .filter({ hasText: "Action required" })
+    .first()
+    .getByRole("button", { name: /^Open / })
+    .click();
   await page
     .getByRole("button", { name: "Resolve issue", exact: true })
     .click();

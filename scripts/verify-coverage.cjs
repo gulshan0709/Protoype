@@ -22,7 +22,7 @@ const base = process.env.VIZENTA_QA_URL || "http://127.0.0.1:8082";
   page.on("pageerror", (e) => failures.push({ active, error: e.message }));
   await page.goto(base);
   await enterWorkspace();
-  await page.getByText("Workspace overview", { exact: true }).waitFor();
+  await page.getByText("Customer Readiness", { exact: true }).first().waitFor();
   for (const industry of ids) {
     const data = require("../src/domain/contracts/data/" + industry + ".json");
     for (const variant of industry === "retail"
@@ -49,7 +49,7 @@ const base = process.env.VIZENTA_QA_URL || "http://127.0.0.1:8082";
         );
         await page.goto(base);
         await enterWorkspace();
-        await page.getByText("Workspace overview", { exact: true }).waitFor();
+        await page.getByText(role.home, { exact: true }).first().waitFor();
         for (const type of ["org", "product"])
           for (const name of type === "org"
             ? role.organization
