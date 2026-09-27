@@ -56,6 +56,7 @@ const paths: Record<string, string> = {
   activity: "M2 12h5l3-8 4 16 3-8h5",
   camera: "M3 7h13v12H3ZM16 10l5-3v12l-5-3",
   mail: "M3 5h18v14H3ZM3 5l9 8 9-8",
+  eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12ZM9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
 };
 export const Icon = React.memo(function Icon({
   name,

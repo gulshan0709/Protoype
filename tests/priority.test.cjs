@@ -13,6 +13,9 @@ const {
   decisionOwner,
   actionQueue,
   needsAction,
+  canonicalRoleFor,
+  homeMetricLabel,
+  showHomeMetric,
 } = require("../src/domain/contracts/priority.ts");
 const { cellText } = require("../src/domain/contracts/logic.ts");
 const ids = ["education", "corporate", "retail", "manufacturing"];
@@ -39,6 +42,29 @@ test("every persona has its own mission profile (29 in total)", () => {
     "Security Response",
   ]);
   assert.equal(missionFor("education", "unknown").queue, "Priority queue");
+});
+
+test("industry personas map to five reusable access roles", () => {
+  assert.equal(canonicalRoleFor("vizenta_admin"), "Vizenta Admin");
+  assert.equal(canonicalRoleFor("customer_admin"), "Customer Admin");
+  assert.equal(canonicalRoleFor("loss_prevention"), "Security Admin");
+  assert.equal(canonicalRoleFor("dean"), "Manager");
+  assert.equal(canonicalRoleFor("faculty"), "Operator");
+});
+
+test("home KPIs use role-specific language and omit empty data gaps", () => {
+  assert.equal(
+    homeMetricLabel("customer_admin", "Needs action"),
+    "Blocking issues",
+  );
+  assert.equal(
+    homeMetricLabel("security_admin", "Verified or ready"),
+    "Security readiness",
+  );
+  assert.equal(homeMetricLabel("dean", "Source exclusions"), "Data gaps");
+  assert.equal(showHomeMetric("Source exclusions", "0"), false);
+  assert.equal(showHomeMetric("Source exclusions", "2"), true);
+  assert.equal(showHomeMetric("Needs action", "0"), true);
 });
 
 test("security personas lead with Safety; the warden and others keep Presence", () => {

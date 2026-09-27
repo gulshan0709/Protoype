@@ -28,8 +28,8 @@ export const missions: Record<string, Record<string, Mission>> = {
     dean: mission(
       "automation",
       A,
-      "Academic attendance requiring action",
-      "Resolve class and lab exceptions before the academic and ERP cutoff.",
+      "Academic attendance and engagement",
+      "Review class and lab exceptions, engagement trends and downstream ERP readiness.",
       "Session sequence",
     ),
     faculty: mission(
@@ -246,6 +246,80 @@ const fallback = mission(
 
 export function missionFor(industry: string, role: string): Mission {
   return missions[industry]?.[role] ?? fallback;
+}
+
+const securityRoles = new Set([
+  "security_admin",
+  "warden",
+  "corporate_security_admin",
+  "infosec_audit",
+  "loss_prevention",
+  "plant_security_admin",
+  "ehs_incident_commander",
+]);
+const managerRoles = new Set([
+  "dean",
+  "coordinator",
+  "facilities_manager",
+  "regional_operations",
+  "regional_manager",
+  "location_manager",
+  "shift_supervisor",
+  "plant_operations_manager",
+]);
+const operatorRoles = new Set([
+  "faculty",
+  "reception_lead",
+  "hr_workforce_admin",
+  "logistics",
+  "workforce_contractor_admin",
+  "stores_logistics_manager",
+]);
+
+/** Five reusable access roles; industry job titles remain persona context. */
+export function canonicalRoleFor(role: string) {
+  if (role === "vizenta_admin") return "Vizenta Admin";
+  if (role === "customer_admin") return "Customer Admin";
+  if (securityRoles.has(role)) return "Security Admin";
+  if (managerRoles.has(role)) return "Manager";
+  if (operatorRoles.has(role)) return "Operator";
+  return role
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+/** Customer-facing labels for the repeated generated home-page measures. */
+export function homeMetricLabel(role: string, label: string) {
+  const canonical = canonicalRoleFor(role);
+  if (/source exclusions/i.test(label)) return "Data gaps";
+  if (/verified or ready/i.test(label))
+    return (
+      {
+        "Vizenta Admin": "Deployment readiness",
+        "Customer Admin": "Customer readiness",
+        "Security Admin": "Security readiness",
+        Manager: "Operational readiness",
+        Operator: "Work completed",
+      }[canonical] ?? label
+    );
+  if (/requiring action|needs action/i.test(label))
+    return (
+      {
+        "Vizenta Admin": "Deployments needing action",
+        "Customer Admin": "Blocking issues",
+        "Security Admin": "Critical items",
+        Manager: "Exceptions needing action",
+        Operator: "Tasks needing attention",
+      }[canonical] ?? label
+    );
+  return label;
+}
+
+/** Zero data gaps stay in source details instead of occupying a top KPI. */
+export function showHomeMetric(label: string, value: string) {
+  if (!/source exclusions/i.test(label)) return true;
+  return !/^0(?:\.0+)?%?$/.test(value.trim());
 }
 
 export type Family = "Presence" | "Safety" | "Insights";

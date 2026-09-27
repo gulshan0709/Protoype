@@ -17,6 +17,7 @@ export function Metrics({
   narrow,
   onPress,
   accent,
+  labelFor,
 }: {
   metrics: Metric[];
   scope: string;
@@ -24,6 +25,8 @@ export function Metrics({
   onPress: (metric: Metric) => void;
   /** Mission color; when set, one priority KPI leads the supporting ones. */
   accent?: string;
+  /** Optional display label; the original metric label remains the route key. */
+  labelFor?: (metric: Metric) => string;
 }) {
   const c = useTheme();
   const { width } = useWindowDimensions();
@@ -67,6 +70,7 @@ export function Metrics({
       }}
     >
       {ordered.map((metric, i) => {
+        const label = labelFor?.(metric) ?? metric.label;
         const lead = primary >= 0 && i === 0;
         const layout = cell(i);
         const valueColor =
@@ -79,7 +83,7 @@ export function Metrics({
           <Pressable
             key={metric.label}
             accessibilityRole="button"
-            accessibilityLabel={"Explore " + metric.label}
+            accessibilityLabel={"Explore " + label}
             onPress={() => onPress(metric)}
             style={({ pressed, hovered }: any) => ({
               flexGrow: 1,
@@ -109,7 +113,7 @@ export function Metrics({
                   {"Priority · "}
                 </Txt>
               )}
-              {metric.label}
+              {label}
             </Txt>
             <Txt
               size={lead ? (narrow ? 26 : 30) : narrow ? 22 : 26}
