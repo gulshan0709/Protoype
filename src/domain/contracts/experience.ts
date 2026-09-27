@@ -81,9 +81,3 @@ export function pageDescription(
   if (industry === "education" || type !== "product") return authored;
   return productDescriptions[name] ?? authored;
 }
-
-export function workspaceEyebrow(industry: IndustryId) {
-  return industry === "education"
-    ? "EDUCATION"
-    : `ENTERPRISE · ${templateLabel(industry).toUpperCase()} TEMPLATE`;
-}

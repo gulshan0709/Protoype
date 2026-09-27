@@ -10,10 +10,7 @@ import {
   familyOrder,
 } from "../../../domain/contracts/priority";
 import type { Location } from "../../../domain/contracts/types";
-import {
-  productIcon,
-  workspaceEyebrow,
-} from "../../../domain/contracts/experience";
+import { productIcon } from "../../../domain/contracts/experience";
 import { useTheme } from "../../../shared/theme/Theme";
 import { BrandMark, BrandWordmark, Icon } from "../../../shared/ui/Icon";
 import { Row, Txt } from "../../../shared/ui/Primitives";
@@ -167,7 +164,7 @@ export function Navigation({
                   color={c.sidebarMuted}
                   style={{ letterSpacing: 1.3 }}
                 >
-                  {workspaceEyebrow(workspace.industry)}
+                  {industry.tenant.toUpperCase()}
                 </Txt>
                 <Txt size={11} bold color={c.sidebarText} lines={1}>
                   {canonicalRoleFor(workspace.role)} workspace
