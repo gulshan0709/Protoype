@@ -151,7 +151,7 @@ test("the name lists include every demo name pool", () => {
 
 // Values in person columns that are organisations, roles, teams or places, by first word.
 const NON_PERSON_LEADS = new Set(
-  "Academic Acting Administration Allied Apex Awaiting Bluebonnet Building CSE Campus Catering Chemical Chief College Computing Control Corporate Customer Data Dev Dispatch Distribution ECE East Electrical Exam Executive Facilities Finished-goods Gate Guard Harbor High-voltage Hostel InfoSec Innovation LP Lab Laundry Location Logistics MBA Maintenance Management Meridian Metro Network Night Northline Northstar Operations PG Payroll People Plant Platform Privacy Product Program Quality Reception Regional Registrar Research Scrap Security Service Shift Solutions Store Stores Student Swift Team Tri-State Unit Vendor Warden Warehouse Weighbridge Workplace".split(
+  "Academic Acting Administration Allied Apex Awaiting Bluebonnet Building CSE Campus Catering Chemical Chief College Computing Control Corporate Customer Data Dev Dispatch Distribution ECE East Electrical Exam Executive Facilities Facility Finished-goods Gate Guard Harbor Healthcare High-voltage Hostel InfoSec Innovation Lakeside LP Lab Laundry Location Logistics MBA Maintenance Management Meridian Metro Network Night Northline Northstar Operations PG Payroll People Plant Platform Privacy Product Program Quality Reception Regional Registrar Research Scrap Security Service Shift Site Solutions Store Stores Student Swift Team Tri-State Unit Vendor Warden Warehouse Weighbridge Workplace".split(
     " ",
   ),
 );
