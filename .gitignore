@@ -4,6 +4,7 @@ dist/
 dist-native/
 dist-pages/
 qa/
+.sites-runtime/
 *.log
 .env*
 /android/
