@@ -18,6 +18,7 @@ import education from "./data/education.json";
 import corporate from "./data/corporate.json";
 import retail from "./data/retail.json";
 import manufacturing from "./data/manufacturing.json";
+import { constructionIndustry, healthcareIndustry } from "./derivedIndustries";
 import type {
   Industry,
   IndustryId,
@@ -56,6 +57,8 @@ applyCorporateRows(industries.corporate, {
   ...corporateRows3,
   ...corporateRows4,
 } as unknown as Record<string, AuthoredRow[]>);
+industries.construction = constructionIndustry(industries.manufacturing);
+industries.healthcare = healthcareIndustry(industries.corporate);
 // Only these corpora carry placeholder contacts or copied wording (tests keep the others clean).
 realisticContacts(industries.education);
 realisticContacts(industries.retail);

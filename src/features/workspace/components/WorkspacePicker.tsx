@@ -10,13 +10,17 @@ import { Select } from "../../../shared/ui/Select";
 import { missionFor } from "../../../domain/contracts/priority";
 import { MissionLabel } from "./Priority";
 import {
-  solutionFor,
-  solutionLabel,
   templateLabel,
-  templatesFor,
   workspaceRoleLabel,
-  type SolutionId,
 } from "../../../domain/contracts/experience";
+const industryIds = [
+  "education",
+  "corporate",
+  "retail",
+  "manufacturing",
+  "construction",
+  "healthcare",
+] as IndustryId[];
 export function WorkspacePicker({
   onSave,
 }: {
@@ -27,7 +31,6 @@ export function WorkspacePicker({
   const c = useTheme();
   const industry = industries[draft.industry];
   const role = industry.core.roles[draft.role];
-  const solution = solutionFor(draft.industry);
   const roleOptions = useMemo(
     () =>
       Object.entries(industry.core.roles).map(([value, r]) => ({
@@ -36,16 +39,7 @@ export function WorkspacePicker({
       })),
     [industry],
   );
-  const chooseSolution = (next: SolutionId) => {
-    const nextIndustry = templatesFor(next)[0];
-    const nextContract = industries[nextIndustry];
-    setDraft({
-      industry: nextIndustry,
-      role: "customer_admin",
-      scope: nextContract.core.roles.customer_admin.scopes[0],
-    });
-  };
-  const chooseTemplate = (nextIndustry: IndustryId) => {
+  const chooseIndustry = (nextIndustry: IndustryId) => {
     const nextContract = industries[nextIndustry];
     setDraft({
       industry: nextIndustry,
@@ -56,27 +50,27 @@ export function WorkspacePicker({
   return (
     <>
       <Txt size={13} color={c.muted}>
-        Choose a solution, setup template, access profile, and assigned scope.
+        Choose an industry, access profile, and assigned scope.
       </Txt>
       <Txt size={12} bold>
-        Solution
+        Industry
       </Txt>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-        {(["education", "enterprise"] as SolutionId[]).map((item) => (
+        {industryIds.map((item) => (
           <Pressable
             key={item}
             accessibilityRole="button"
-            accessibilityLabel={`${solutionLabel(item === "education" ? "education" : "corporate")} solution`}
-            aria-pressed={item === solution}
-            onPress={() => chooseSolution(item)}
+            accessibilityLabel={`${templateLabel(item)} industry`}
+            aria-pressed={item === draft.industry}
+            onPress={() => chooseIndustry(item)}
             style={{
               flexBasis: "46%",
               flexGrow: 1,
               padding: 17,
               borderWidth: 1,
-              borderColor: item === solution ? c.primary : c.border,
+              borderColor: item === draft.industry ? c.primary : c.border,
               backgroundColor:
-                item === solution ? c.actionPrimary : c.actionSecondary,
+                item === draft.industry ? c.actionPrimary : c.actionSecondary,
               borderRadius: 11,
               gap: 12,
             }}
@@ -86,33 +80,11 @@ export function WorkspacePicker({
               color={c.actionInk}
             />
             <Txt size={12} bold color={c.actionInk}>
-              {item === "education" ? "Education" : "Enterprise"}
+              {templateLabel(item)}
             </Txt>
           </Pressable>
         ))}
       </View>
-      {solution === "enterprise" && (
-        <>
-          <Txt size={12} bold>
-            Setup template
-          </Txt>
-          <Txt size={11} color={c.muted}>
-            Templates provide starting data, site types, rules and dashboard
-            defaults. Products and workflows remain the same.
-          </Txt>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {templatesFor("enterprise").map((id) => (
-              <Button
-                key={id}
-                compact
-                label={templateLabel(id)}
-                variant={id === draft.industry ? "primary" : undefined}
-                onPress={() => chooseTemplate(id)}
-              />
-            ))}
-          </View>
-        </>
-      )}
       <Txt size={12} bold>
         Access profile preview
       </Txt>

@@ -7,6 +7,8 @@ const enterpriseTemplates: Exclude<IndustryId, "education">[] = [
   "corporate",
   "retail",
   "manufacturing",
+  "construction",
+  "healthcare",
 ];
 
 export const solutionFor = (industry: IndustryId): SolutionId =>
@@ -21,6 +23,8 @@ export const templateLabel = (industry: IndustryId) =>
     corporate: "Corporate",
     retail: "Retail & Warehouse",
     manufacturing: "Manufacturing",
+    construction: "Construction",
+    healthcare: "Healthcare",
   })[industry];
 
 export const templatesFor = (solution: SolutionId): IndustryId[] =>

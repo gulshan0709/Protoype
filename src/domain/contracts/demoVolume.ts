@@ -89,6 +89,8 @@ const domains: Record<IndustryId, string> = {
   corporate: "northstarcorp.com",
   retail: "northstarretail.com",
   manufacturing: "meridianmfg.com",
+  construction: "apexconstruction.com",
+  healthcare: "meridianhealth.org",
 };
 const mobilePrefixes = ["98", "97", "96", "95", "94", "93", "91", "90", "88", "87", "86", "85", "84", "81", "79", "78", "77", "76", "75", "73", "70"];
 /** Stable realistic mobile number for a placeholder such as 9876501010. */

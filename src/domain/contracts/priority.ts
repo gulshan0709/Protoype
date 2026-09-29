@@ -235,6 +235,122 @@ export const missions: Record<string, Record<string, Mission>> = {
       "Platform work queue",
     ),
   },
+  construction: {
+    site_security_admin: mission(
+      "security",
+      S,
+      "Critical site cases and response SLA",
+      "Act on unauthorized access, unowned cases and degraded security coverage.",
+      "Site command queue",
+    ),
+    ehs_safety_manager: mission(
+      "security",
+      S,
+      "Safety, muster and permit readiness",
+      "Prioritize active hazards, accountability gaps and expiring work permits.",
+      "EHS action board",
+    ),
+    project_site_manager: mission(
+      "combined",
+      C,
+      "Site operating position",
+      "See workforce, zone, safety and logistics blockers across the current project.",
+      "Project priorities",
+    ),
+    workforce_contractor_admin: mission(
+      "automation",
+      A,
+      "Crew, contractor and payroll readiness",
+      "Resolve attendance, certification and contractor exceptions before cutoff.",
+      "Workforce readiness board",
+    ),
+    logistics_materials_coordinator: mission(
+      "automation",
+      A,
+      "Vehicle, material and delivery flow",
+      "Prioritize delayed arrivals, authorization gaps and incomplete releases.",
+      "Materials timeline",
+    ),
+    gate_guard_operator: mission(
+      "security",
+      S,
+      "Gate and post actions",
+      "Process access exceptions, dispatches and handover tasks for assigned posts.",
+      "Gate action queue",
+    ),
+    customer_admin: mission(
+      "combined",
+      C,
+      "Project readiness and blockers",
+      "Separate site security readiness from workforce, permit and ERP integration readiness.",
+      "Readiness",
+    ),
+    vizenta_admin: mission(
+      "platform",
+      P,
+      "Customer and deployment health",
+      "Resolve deployment, integration, entitlement and support risk across managed sites.",
+      "Platform work queue",
+    ),
+  },
+  healthcare: {
+    security_admin: mission(
+      "security",
+      S,
+      "Critical facility cases and response SLA",
+      "Act on unauthorized access, unowned cases and degraded safety coverage.",
+      "Security command queue",
+    ),
+    facilities_operations_manager: mission(
+      "combined",
+      C,
+      "Facility operating position",
+      "Resolve controlled-area, visitor, source and service-flow exceptions.",
+      "Facilities action board",
+    ),
+    clinical_operations_coordinator: mission(
+      "automation",
+      A,
+      "Department and service-area readiness",
+      "Review non-clinical presence, staffing and access conditions across assigned units.",
+      "Operations priorities",
+    ),
+    hr_workforce_admin: mission(
+      "automation",
+      A,
+      "Workforce attendance and payroll cutoff",
+      "Resolve workforce exceptions and HRMS synchronization failures before cutoff.",
+      "Reconciliation queue",
+    ),
+    reception_visitor_desk: mission(
+      "automation",
+      A,
+      "Today's visitor and contractor flow",
+      "Handle waiting visitors, delayed hosts, denied access and overdue checkout.",
+      "Arrival timeline",
+    ),
+    guard_response_operator: mission(
+      "security",
+      S,
+      "Assigned response and handover",
+      "Acknowledge events, complete dispatches and preserve evidence for escalation.",
+      "Response queue",
+    ),
+    customer_admin: mission(
+      "combined",
+      C,
+      "Health system readiness and blockers",
+      "Separate security readiness from workforce, visitor and integration readiness.",
+      "Readiness",
+    ),
+    vizenta_admin: mission(
+      "platform",
+      P,
+      "Customer and deployment health",
+      "Resolve deployment, integration, entitlement and support risk across facilities.",
+      "Platform work queue",
+    ),
+  },
 };
 const fallback = mission(
   "combined",
@@ -256,6 +372,11 @@ const securityRoles = new Set([
   "loss_prevention",
   "plant_security_admin",
   "ehs_incident_commander",
+  "site_security_admin",
+  "ehs_safety_manager",
+  "security_admin",
+  "gate_guard_operator",
+  "guard_response_operator",
 ]);
 const managerRoles = new Set([
   "dean",
@@ -266,6 +387,9 @@ const managerRoles = new Set([
   "location_manager",
   "shift_supervisor",
   "plant_operations_manager",
+  "project_site_manager",
+  "facilities_operations_manager",
+  "clinical_operations_coordinator",
 ]);
 const operatorRoles = new Set([
   "faculty",
@@ -274,6 +398,8 @@ const operatorRoles = new Set([
   "logistics",
   "workforce_contractor_admin",
   "stores_logistics_manager",
+  "logistics_materials_coordinator",
+  "reception_visitor_desk",
 ]);
 
 /** Five reusable access roles; industry job titles remain persona context. */

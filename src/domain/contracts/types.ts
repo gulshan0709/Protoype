@@ -1,4 +1,10 @@
-export type IndustryId = "education" | "corporate" | "retail" | "manufacturing";
+export type IndustryId =
+  | "education"
+  | "corporate"
+  | "retail"
+  | "manufacturing"
+  | "construction"
+  | "healthcare";
 export type Tone =
   | "healthy"
   | "attention"
