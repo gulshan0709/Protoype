@@ -1,4 +1,6 @@
 import { RecordMedia } from "./RecordMedia";
+import { PersonGalleryDialog } from "./PersonGallery";
+import { personGalleryEnabled } from "../../../domain/gate/captureHistory";
 import { UserIdentity } from "./UserIdentity";
 import {
   PersonChip,
@@ -107,6 +109,9 @@ export function Records({
   const { width } = useWindowDimensions();
   const mobile = width < 768;
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Pages that open a person's capture gallery from the Capture column.
+  const gallery = personGalleryEnabled(page);
+  const [galleryFor, setGalleryFor] = useState<DataRecord>();
   const activeFilterCount = Object.values(filters).filter(
     (value) => value && !/^(all\b|across\b|current$)/i.test(value),
   ).length;
@@ -479,7 +484,12 @@ export function Records({
                           {col.label.toUpperCase()}
                         </Txt>
                         {col.id === "capture" ? (
-                          <RecordMedia record={row} />
+                          <RecordMedia
+                            record={row}
+                            onOpen={
+                              gallery ? () => setGalleryFor(row) : undefined
+                            }
+                          />
                         ) : people.get(row.id)?.cells[col.id] ? (
                           <View
                             style={{
@@ -652,7 +662,12 @@ export function Records({
                       style={[columnStyle(j), { gap: 4 }]}
                     >
                       {col.id === "capture" ? (
-                        <RecordMedia record={row} />
+                        <RecordMedia
+                          record={row}
+                          onOpen={
+                            gallery ? () => setGalleryFor(row) : undefined
+                          }
+                        />
                       ) : j === 0 && people.get(row.id)?.identity ? (
                         <>
                           {columns.some((col) => col.id === "capture") ? (
@@ -766,6 +781,12 @@ export function Records({
           />
         </Row>
       </Row>
+      {galleryFor && (
+        <PersonGalleryDialog
+          record={galleryFor}
+          onClose={() => setGalleryFor(undefined)}
+        />
+      )}
     </View>
   );
 }

@@ -5,6 +5,7 @@ import { wardenProduct } from "./wardenExtension";
 import { gateAttendance } from "./gateExtension";
 import surveillanceSamples from "../surveillance/samples.json";
 import { surveillanceUsers } from "./surveillanceExtension";
+import { mediaExplorer } from "./mediaExtension";
 import { customerAdminLearners } from "./learnerExtension";
 import { familyOrder, orderByFamily } from "./priority";
 import { withDemoVolume, realisticContacts } from "./demoVolume";
@@ -41,6 +42,7 @@ surveillanceUsers(
 populateDemoData(industries.education);
 populateMediaDemo(industries.education);
 moveSurveillanceToShield(industries.education);
+mediaExplorer(industries.education);
 // Recognition users are managed from the consolidated People & Access directory.
 for (const [roleId, role] of Object.entries(industries.education.core.roles)) {
   if (industries.education.pages[roleId]?.org["People & Access"]?.Users) {

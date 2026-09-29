@@ -24,6 +24,8 @@ import { cameraSetupVariant } from "../../domain/cameras/setup";
 import { CameraSetupDialog } from "./components/CameraSetupDialog";
 import { learnerSetupEnabled } from "../../domain/learners/setup";
 import { LearnerSetupDialog } from "./components/LearnerSetupDialog";
+import { MediaExplorer } from "./components/MediaExplorer";
+import { MEDIA_EXPLORER_PAGE } from "../../domain/contracts/mediaExtension";
 import React, {
   useState,
   useMemo,
@@ -127,6 +129,11 @@ export default function WorkspaceScreen() {
     record?: string;
     metric?: string;
     userGroup?: string;
+    // Media Explorer position: customer, camera, date and time slot folders.
+    org?: string;
+    camera?: string;
+    date?: string;
+    slot?: string;
   }>();
   const [modal, setModal] = useState("");
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -986,6 +993,33 @@ export default function WorkspaceScreen() {
                   ) : page.id === "ca-setup-criteria" ? (
                     <CriteriaView
                       key={app.workspace.scope}
+                      notify={app.notify}
+                    />
+                  ) : page.id === MEDIA_EXPLORER_PAGE ? (
+                    <MediaExplorer
+                      key={app.workspace.scope}
+                      scope={app.workspace.scope}
+                      selection={{
+                        org: params.org,
+                        camera: params.camera,
+                        date: params.date,
+                        slot: params.slot,
+                      }}
+                      onSelect={(next) => {
+                        // Each step is a history entry, so Back goes up one level.
+                        router.push({
+                          pathname: "/",
+                          params: {
+                            type: location.type,
+                            name: location.name,
+                            tab: location.tab,
+                            ...Object.fromEntries(
+                              Object.entries(next).filter(([, v]) => v),
+                            ),
+                          },
+                        });
+                        scroll.current?.scrollTo({ y: 0, animated: false });
+                      }}
                       notify={app.notify}
                     />
                   ) : page.id === "ca-setup-dashboard" ? (

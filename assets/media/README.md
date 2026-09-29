@@ -16,3 +16,9 @@ To regenerate, download the source to a local temporary file and run `node scrip
 - `still-w8`, `still-m1`, `still-m2`: `assets/auth/surveillance-lobby-front.png`. `still-m3`: `assets/auth/education-surveillance.png`. `still-m4` to `still-m6`: `assets/auth/education-classroom.png`. `still-m7`: `assets/auth/options/camera-view.png`. These are the bundled, generated login artwork with fictional people (see `assets/auth/use-case-artwork.md`), cropped to 16:9.
 
 To regenerate, run `node scripts/prepare-demo-captures.cjs <ffmpeg-executable> <source.mp4>`. It rewrites the stills and `demoCaptures.ts` and leaves the clips untouched. The shared detection colors are defined in `src/domain/contracts/detectionDemo.ts`. No external media requests occur at runtime.
+
+## Media Explorer frames
+
+`frames/clip1-01.jpg` to `frames/clip3-16.jpg` are 1280 x 720 frames taken twice a second from `gate-1.mp4` to `gate-3.mp4`, so each keeps the clip's banner and tracking boxes. `frames/thumbs/` holds a 480 x 270 grid thumbnail for each of them and for every `still-*.jpg`. Together they add about 2.8 MB. `src/domain/media/framePool.json` groups them into the scenes a camera shows (three corridor clips, the office hall, the lobby, the classroom and the library) with their file sizes. The explorer replays a scene in bursts, the way a camera keeps frames while something moves, and draws the box on stills as the captures do.
+
+To regenerate, run `node scripts/prepare-media-frames.cjs <ffmpeg-executable>`. It reads only the bundled clips and stills, and rewrites `frames/`, the pool and `src/features/workspace/components/mediaFrameSources.ts`.

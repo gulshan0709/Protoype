@@ -15,7 +15,7 @@
     "build:native": "expo export --platform ios --platform android --output-dir dist-native",
     "typecheck": "tsc --noEmit",
     "contracts:import": "node scripts/import-contracts.cjs",
-    "test": "node --test tests/contracts.test.cjs tests/class-setup.test.cjs tests/learner-setup.test.cjs tests/camera-setup.test.cjs tests/surveillance-setup.test.cjs tests/gate-attendance.test.cjs tests/demo-data.test.cjs tests/app-lock.test.cjs tests/priority.test.cjs tests/demo-volume.test.cjs tests/detection-demo.test.cjs tests/class-attendance.test.cjs tests/portraits.test.cjs",
+    "test": "node --test tests/contracts.test.cjs tests/class-setup.test.cjs tests/learner-setup.test.cjs tests/camera-setup.test.cjs tests/surveillance-setup.test.cjs tests/gate-attendance.test.cjs tests/demo-data.test.cjs tests/app-lock.test.cjs tests/priority.test.cjs tests/demo-volume.test.cjs tests/detection-demo.test.cjs tests/class-attendance.test.cjs tests/portraits.test.cjs tests/media-explorer.test.cjs tests/capture-history.test.cjs",
     "test:ui": "node scripts/verify-ui.cjs",
     "test:auth": "node scripts/verify-auth.cjs",
     "test:pages": "node scripts/verify-pages.cjs",
@@ -29,6 +29,8 @@
     "test:tables": "node scripts/verify-table-alignment.cjs",
     "test:class-setup": "node scripts/verify-class-setup.cjs",
     "test:portraits": "node scripts/verify-person-portraits.cjs",
+    "test:media-explorer": "node scripts/verify-media-explorer.cjs",
+    "test:person-gallery": "node scripts/verify-person-gallery.cjs",
     "portraits:assign": "node scripts/assign-demo-portraits.cjs"
   },
   "dependencies": {

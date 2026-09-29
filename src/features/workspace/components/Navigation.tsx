@@ -252,11 +252,13 @@ export function Navigation({
             name,
             /People|Access/.test(name)
               ? "users"
-              : /Sources|Health/.test(name)
-                ? "settings"
-                : /Overview|Readiness/.test(name)
-                  ? "building"
-                  : "folder",
+              : /Media/.test(name)
+                ? "camera"
+                : /Sources|Health/.test(name)
+                  ? "settings"
+                  : /Overview|Readiness/.test(name)
+                    ? "building"
+                    : "folder",
             "org",
           ),
         )}

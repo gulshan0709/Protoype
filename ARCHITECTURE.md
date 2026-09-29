@@ -31,6 +31,7 @@ Dependencies flow from application/features to domain/shared. Shared controls do
 | Class structure, class and lab attendance, faculty/coordinator views | Education → Class & Lab Attendance plus persona-specific Academic Structure |
 | Hostels, wardens, resident movement and leave | Education → Hostel, Gate and residence Organization pages |
 | User administration and source/camera setup | Entitled Organization → People & Access / Sources & Setup or industry equivalent |
+| Camera Media Explorer (`/media_explorer`) | Education → Vizenta Admin → Organization → Media Explorer |
 | Incident evidence and exception follow-up | Safety → Shield, with source context retained in the originating product |
 | Patrol, post coverage and handover | Safety → Guard |
 | Visitor lifecycle | Safety → Visitor |

@@ -63,7 +63,7 @@ const labelShadow = {
   textShadowRadius: 3,
 };
 /** Whole 16:9 frame with the person's box and label drawn inside it. */
-function CaptureFrame({
+export function CaptureFrame({
   still,
   kind,
   title,
@@ -335,16 +335,21 @@ function NativeVideo({ source, title }: { source: number; title: string }) {
     />
   );
 }
-function FaceCapture({
+export function FaceCapture({
   uri,
   name,
   size = 52,
   color,
+  framing,
+  lowLight,
 }: {
   uri: string;
   name?: string;
   size?: number;
   color: string;
+  /** Where this capture's crop sits on the face (zoom, offset as a share of the size). */
+  framing?: { scale: number; x: number; y: number };
+  lowLight?: boolean;
 }) {
   const c = useTheme();
   const reduced = useReducedMotion();
@@ -391,8 +396,24 @@ function FaceCapture({
         }
         accessibilityLabel="Face capture"
         resizeMode="cover"
-        style={{ width: size, height: size }}
+        style={{
+          width: size,
+          height: size,
+          transform: framing
+            ? [
+                { translateX: framing.x * size },
+                { translateY: framing.y * size },
+                { scale: framing.scale },
+              ]
+            : undefined,
+        }}
       />
+      {lowLight && (
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: LOW_LIGHT }]}
+        />
+      )}
       <View
         pointerEvents="none"
         style={{
@@ -448,7 +469,16 @@ function FaceCapture({
     </View>
   );
 }
-export function RecordMedia({ record }: { record: DataRecord }) {
+/** Tint for captures taken in the dark hours. */
+export const LOW_LIGHT = "rgba(4,16,34,0.34)";
+export function RecordMedia({
+  record,
+  onOpen,
+}: {
+  record: DataRecord;
+  /** Replaces the built-in preview, e.g. with the person's capture gallery. */
+  onOpen?: () => void;
+}) {
   const c = useTheme();
   const [open, setOpen] = useState(false);
   const video = typeof record.videoAsset === "number";
@@ -472,7 +502,8 @@ export function RecordMedia({ record }: { record: DataRecord }) {
         }
         onPress={(event) => {
           event.stopPropagation();
-          setOpen(true);
+          if (onOpen) onOpen();
+          else setOpen(true);
         }}
         style={{
           alignSelf: "flex-start",

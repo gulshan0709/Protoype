@@ -1,0 +1,119 @@
+{
+ "corridor-a": {
+  "burst": 16,
+  "interval": 0.5,
+  "frames": [
+   {"file": "clip1-01", "size": 42062},
+   {"file": "clip1-02", "size": 41992},
+   {"file": "clip1-03", "size": 42045},
+   {"file": "clip1-04", "size": 42221},
+   {"file": "clip1-05", "size": 42505},
+   {"file": "clip1-06", "size": 42647},
+   {"file": "clip1-07", "size": 42596},
+   {"file": "clip1-08", "size": 42825},
+   {"file": "clip1-09", "size": 42140},
+   {"file": "clip1-10", "size": 46860},
+   {"file": "clip1-11", "size": 48864},
+   {"file": "clip1-12", "size": 51313},
+   {"file": "clip1-13", "size": 51419},
+   {"file": "clip1-14", "size": 46059},
+   {"file": "clip1-15", "size": 45891},
+   {"file": "clip1-16", "size": 45772}
+  ],
+  "recording": {
+   "video": 0,
+   "size": 2477379
+  }
+ },
+ "corridor-b": {
+  "burst": 16,
+  "interval": 0.5,
+  "frames": [
+   {"file": "clip2-01", "size": 41887},
+   {"file": "clip2-02", "size": 42046},
+   {"file": "clip2-03", "size": 42052},
+   {"file": "clip2-04", "size": 42106},
+   {"file": "clip2-05", "size": 42304},
+   {"file": "clip2-06", "size": 42590},
+   {"file": "clip2-07", "size": 42536},
+   {"file": "clip2-08", "size": 42890},
+   {"file": "clip2-09", "size": 42102},
+   {"file": "clip2-10", "size": 46262},
+   {"file": "clip2-11", "size": 49018},
+   {"file": "clip2-12", "size": 51292},
+   {"file": "clip2-13", "size": 50815},
+   {"file": "clip2-14", "size": 45792},
+   {"file": "clip2-15", "size": 45804},
+   {"file": "clip2-16", "size": 45484}
+  ],
+  "recording": {
+   "video": 1,
+   "size": 2510758
+  }
+ },
+ "corridor-c": {
+  "burst": 16,
+  "interval": 0.5,
+  "frames": [
+   {"file": "clip3-01", "size": 42042},
+   {"file": "clip3-02", "size": 42025},
+   {"file": "clip3-03", "size": 41981},
+   {"file": "clip3-04", "size": 42143},
+   {"file": "clip3-05", "size": 42488},
+   {"file": "clip3-06", "size": 42724},
+   {"file": "clip3-07", "size": 42578},
+   {"file": "clip3-08", "size": 42874},
+   {"file": "clip3-09", "size": 42021},
+   {"file": "clip3-10", "size": 46783},
+   {"file": "clip3-11", "size": 48688},
+   {"file": "clip3-12", "size": 51411},
+   {"file": "clip3-13", "size": 51539},
+   {"file": "clip3-14", "size": 46078},
+   {"file": "clip3-15", "size": 45944},
+   {"file": "clip3-16", "size": 45761}
+  ],
+  "recording": {
+   "video": 2,
+   "size": 2481672
+  }
+ },
+ "hall": {
+  "burst": 7,
+  "interval": 1.5,
+  "frames": [
+   {"file": "still-w1", "still": "w1", "size": 47202},
+   {"file": "still-w2", "still": "w2", "size": 50228},
+   {"file": "still-w3", "still": "w3", "size": 52999},
+   {"file": "still-w4", "still": "w4", "size": 55056},
+   {"file": "still-w5", "still": "w5", "size": 55852},
+   {"file": "still-w6", "still": "w6", "size": 56956},
+   {"file": "still-w7", "still": "w7", "size": 44908}
+  ]
+ },
+ "lobby": {
+  "burst": 4,
+  "interval": 2,
+  "frames": [
+   {"file": "still-m1", "still": "m1", "size": 203536},
+   {"file": "still-w8", "still": "w8", "size": 203534},
+   {"file": "still-m2", "still": "m2", "size": 203540},
+   {"file": "still-m7", "still": "m7", "size": 209186}
+  ]
+ },
+ "classroom": {
+  "burst": 3,
+  "interval": 4,
+  "frames": [
+   {"file": "still-m4", "still": "m4", "size": 158281},
+   {"file": "still-m5", "still": "m5", "size": 158285},
+   {"file": "still-m6", "still": "m6", "size": 158315}
+  ]
+ },
+ "library": {
+  "burst": 1,
+  "interval": 3,
+  "frames": [
+   {"file": "still-m3", "still": "m3", "size": 245292}
+  ]
+ }
+}
