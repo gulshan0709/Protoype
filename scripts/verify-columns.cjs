@@ -1,213 +1,135 @@
+// Checks the records column picker: compact defaults without horizontal
+// scrolling, hiding and showing columns, saved choices surviving a reload,
+// Show all and Reset defaults, phone cards following the selection, and the
+// compact defaults in the other three industries (dark), without console
+// errors. Screenshots are saved to qa/columns/.
+//
+//   npm run test:columns
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const { chromium } = require("playwright");
-const base = process.env.VIZENTA_QA_URL || "http://localhost:8083";
-const output = path.resolve(__dirname, "../qa/columns");
-fs.mkdirSync(output, { recursive: true });
+const {
+  KEY,
+  PHONE,
+  button,
+  demoState,
+  enter,
+  main,
+  open,
+  qaDir,
+  records,
+  shooter,
+} = require("./lib/qa.cjs");
 
-(async () => {
-  const browser = await chromium.launch({ channel: "chrome", headless: true });
+main(async (browser) => {
   const errors = [];
-  const watch = (page) => {
-    page.setDefaultTimeout(12000);
-    page.on("pageerror", (e) => errors.push(e.message));
-    page.on("console", (m) => {
-      if (m.type() === "error") errors.push(m.text());
-    });
-  };
-  const enter = async (page) => {
-    await page.getByTestId("launch-screen").waitFor({ state: "detached" });
-    await page
-      .getByRole("button", { name: "Explore workspace", exact: true })
-      .click();
-  };
-  try {
-    const context = await browser.newContext({
-      viewport: { width: 1512, height: 982 },
-      reducedMotion: "reduce",
-    });
-    const page = await context.newPage();
-    watch(page);
-    await page.goto(base);
-    await enter(page);
-    await page
-      .getByRole("button", { name: "Class & Lab Attendance", exact: true })
-      .click();
-    const table = () =>
-      page.getByTestId("records-table").filter({ visible: true });
-    const picker = () =>
-      table().getByRole("button", { name: "Columns", exact: true }).click();
-    const done = () =>
-      page.getByRole("button", { name: "Done", exact: true }).click();
-    assert.equal(
-      await table()
-        .getByRole("button", { name: /^Sort by / })
-        .count(),
-      3,
-    );
-    assert.equal(
-      await table()
-        .getByRole("button", { name: "Sort by Policy", exact: true })
-        .count(),
-      0,
-    );
-    assert.equal(
-      await table()
-        .getByRole("button", { name: "Sort by Source state", exact: true })
-        .count(),
-      0,
-    );
-    assert.equal(
-      await table().evaluate((el) =>
-        [...el.querySelectorAll("div")].some(
-          (x) =>
-            /auto|scroll/.test(getComputedStyle(x).overflowX) &&
-            x.scrollWidth > x.clientWidth + 1,
-        ),
+  const shot = shooter(qaDir("columns"));
+  const { context, page } = await open(browser, {
+    timeout: 12000,
+    errors,
+    consoleErrors: true,
+  });
+  const sortBy = (name) => button(records(page), "Sort by " + name);
+  const sorts = () => records(page).getByRole("button", { name: /^Sort by / });
+  const box = (name) => page.getByRole("checkbox", { name, exact: true });
+  const picker = () => button(records(page), "Columns").click();
+  const done = () => button(page, "Done").click();
+  await button(page, "Class & Lab Attendance").click();
+  assert.equal(await sorts().count(), 3);
+  assert.equal(await sortBy("Policy").count(), 0);
+  assert.equal(await sortBy("Source state").count(), 0);
+  assert.equal(
+    await records(page).evaluate((el) =>
+      [...el.querySelectorAll("div")].some(
+        (x) =>
+          /auto|scroll/.test(getComputedStyle(x).overflowX) &&
+          x.scrollWidth > x.clientWidth + 1,
       ),
-      false,
-      "Default table does not scroll horizontally",
-    );
-    await page.screenshot({ path: path.join(output, "default-desktop.png") });
-    await picker();
-    assert.equal(
-      await page
-        .getByRole("checkbox", { name: "Class / lab", exact: true })
-        .isDisabled(),
-      true,
-    );
-    await page.getByRole("checkbox", { name: "Policy", exact: true }).click();
-    await page.getByRole("checkbox", { name: "Campus", exact: true }).click();
-    await done();
-    await table()
-      .getByRole("button", { name: "Sort by Policy", exact: true })
-      .waitFor();
-    assert.equal(
-      await table()
-        .getByRole("button", { name: "Sort by Campus", exact: true })
-        .count(),
-      0,
-    );
-    await page.waitForFunction(() =>
+    ),
+    false,
+    "Default table does not scroll horizontally",
+  );
+  await shot(page, "default-desktop");
+  await picker();
+  assert.equal(await box("Class / lab").isDisabled(), true);
+  await box("Policy").click();
+  await box("Campus").click();
+  await done();
+  await sortBy("Policy").waitFor();
+  assert.equal(await sortBy("Campus").count(), 0);
+  await page.waitForFunction(
+    (key) =>
       Object.values(
-        JSON.parse(localStorage.getItem("vizenta-ai-demo-v1"))
-          .columnPreferences,
+        JSON.parse(localStorage.getItem(key)).columnPreferences,
       ).some((ids) => ids.includes("policy") && !ids.includes("campus")),
-    );
-    await page.reload();
-    await enter(page);
-    await page
-      .getByRole("button", { name: "Class & Lab Attendance", exact: true })
-      .click();
-    await table()
-      .getByRole("button", { name: "Sort by Policy", exact: true })
-      .waitFor();
-    assert.equal(
-      await table()
-        .getByRole("button", { name: "Sort by Campus", exact: true })
-        .count(),
-      0,
-      "Saved columns survive reload",
-    );
-    await table()
-      .getByRole("button", { name: "Sort by Policy", exact: true })
-      .click();
-    await picker();
-    await page.getByRole("checkbox", { name: "Policy", exact: true }).click();
-    await page.getByRole("checkbox", { name: "Status", exact: true }).click();
-    await done();
-    assert.equal(await table().getByText("Status", { exact: true }).count(), 0);
-    await picker();
-    await page.getByRole("button", { name: "Show all", exact: true }).click();
-    await done();
-    await table()
-      .getByRole("button", { name: "Sort by Source state", exact: true })
-      .waitFor();
-    assert.ok(
-      (await table()
-        .getByRole("button", { name: /^Sort by / })
-        .count()) > 3,
-    );
-    await picker();
-    await page.screenshot({ path: path.join(output, "column-picker.png") });
-    await page
-      .getByRole("button", { name: "Reset defaults", exact: true })
-      .click();
-    await done();
-    assert.equal(
-      await table()
-        .getByRole("button", { name: /^Sort by / })
-        .count(),
-      3,
-    );
-    await page.setViewportSize({ width: 390, height: 844 });
-    const first = table()
-      .getByRole("button", { name: /^Open / })
-      .first();
-    assert.equal(await first.getByText("Policy", { exact: true }).count(), 0);
-    await picker();
-    await page.getByRole("checkbox", { name: "Policy", exact: true }).click();
-    await done();
-    await first.getByText("Policy", { exact: true }).waitFor();
-    await first.evaluate((el) => el.scrollIntoView({ block: "center" }));
-    await page.screenshot({
-      path: path.join(output, "mobile-selected-columns.png"),
-    });
-    await context.close();
+    KEY,
+  );
+  await page.reload();
+  await enter(page);
+  await button(page, "Class & Lab Attendance").click();
+  await sortBy("Policy").waitFor();
+  assert.equal(
+    await sortBy("Campus").count(),
+    0,
+    "Saved columns survive reload",
+  );
+  await sortBy("Policy").click();
+  await picker();
+  await box("Policy").click();
+  await box("Status").click();
+  await done();
+  assert.equal(
+    await records(page).getByText("Status", { exact: true }).count(),
+    0,
+  );
+  await picker();
+  await button(page, "Show all").click();
+  await done();
+  await sortBy("Source state").waitFor();
+  assert.ok((await sorts().count()) > 3);
+  await picker();
+  await shot(page, "column-picker");
+  await button(page, "Reset defaults").click();
+  await done();
+  assert.equal(await sorts().count(), 3);
+  // Phone cards label each selected column in capitals.
+  await page.setViewportSize(PHONE);
+  const first = records(page)
+    .getByRole("button", { name: /^Open / })
+    .first();
+  assert.equal(await first.getByText("POLICY", { exact: true }).count(), 0);
+  await picker();
+  await box("Policy").click();
+  await done();
+  await first.getByText("POLICY", { exact: true }).waitFor();
+  await first.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await shot(page, "mobile-selected-columns");
+  await context.close();
 
-    for (const industry of ["corporate", "retail", "manufacturing"]) {
-      const data = require(`../src/domain/contracts/data/${industry}.json`);
-      const role = data.core.roles.customer_admin
-        ? "customer_admin"
-        : Object.keys(data.core.roles)[0];
-      const scope = data.core.roles[role].scopes[0];
-      const context = await browser.newContext({
-        viewport: { width: 1512, height: 982 },
-        reducedMotion: "reduce",
-      });
-      const page = await context.newPage();
-      watch(page);
-      await page.addInitScript(
-        (workspace) =>
-          localStorage.setItem(
-            "vizenta-ai-demo-v1",
-            JSON.stringify({
-              workspace,
-              theme: "dark",
-              name: "Review",
-              audit: [],
-              readNotifications: [],
-            }),
-          ),
-        { industry, role, scope },
-      );
-      await page.goto(base);
-      await enter(page);
-      const table = page.getByTestId("records-table").filter({ visible: true });
-      await table.waitFor();
-      assert.ok(
-        (await table.getByRole("button", { name: /^Sort by / }).count()) <= 3,
-      );
-      await table.getByRole("button", { name: "Columns", exact: true }).click();
-      await page.getByRole("button", { name: "Show all", exact: true }).click();
-      await page.getByRole("button", { name: "Done", exact: true }).click();
-      assert.ok(
-        (await table.getByRole("button", { name: /^Sort by / }).count()) >= 3,
-      );
-      await context.close();
-      console.log(
-        `${industry}: compact defaults and column picker passed in dark mode`,
-      );
-    }
-    assert.deepEqual(errors, []);
+  for (const industry of ["corporate", "retail", "manufacturing"]) {
+    const data = require(`../src/domain/contracts/data/${industry}.json`);
+    const role = data.core.roles.customer_admin
+      ? "customer_admin"
+      : Object.keys(data.core.roles)[0];
+    const { context, page } = await open(browser, {
+      state: demoState({ industry, role, theme: "dark", name: "Review" }),
+      timeout: 12000,
+      errors,
+      consoleErrors: true,
+    });
+    const table = records(page);
+    const sorts = () => table.getByRole("button", { name: /^Sort by / });
+    await table.waitFor();
+    assert.ok((await sorts().count()) <= 3);
+    await button(table, "Columns").click();
+    await button(page, "Show all").click();
+    await button(page, "Done").click();
+    assert.ok((await sorts().count()) >= 3);
+    await context.close();
     console.log(
-      "Column visibility, persistence, reset, mobile cards and all four industries passed.",
+      `${industry}: compact defaults and column picker passed in dark mode`,
     );
-  } finally {
-    await browser.close();
   }
-})().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
+  assert.deepEqual(errors, []);
+  console.log(
+    "Column visibility, persistence, reset, mobile cards and all four industries passed.",
+  );
 });

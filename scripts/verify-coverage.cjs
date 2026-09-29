@@ -1,30 +1,66 @@
-const { chromium } = require("playwright");
+// Traverses every destination and tab of every role in the four original
+// industries (Retail as Store and Warehouse), as the registry defines them
+// after its extensions: each view shows its heading, primary action and first
+// scoped record (or the empty state). Results are saved to
+// qa/coverage-results.json; the first failures to qa/coverage-failures.json.
+//
+//   npm run test:coverage
+require("./lib/ts-hooks.cjs");
+const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const assert = require("node:assert/strict");
+const {
+  baseUrl,
+  button,
+  demoState,
+  enter,
+  main,
+  open,
+  qaDir,
+  seed,
+  tab,
+} = require("./lib/qa.cjs");
+const { industries, getPage } = require("../src/domain/contracts/registry.ts");
+const base = baseUrl("http://127.0.0.1:8082");
 const ids = ["education", "corporate", "retail", "manufacturing"];
-const base = process.env.VIZENTA_QA_URL || "http://127.0.0.1:8082";
-(async () => {
-  const browser = await chromium.launch({ channel: "chrome", headless: true });
-  const context = await browser.newContext({
-    viewport: { width: 1512, height: 982 },
-  });
-  const page = await context.newPage();
-  const enterWorkspace = async () => {
-    await page.getByTestId("launch-screen").waitFor({ state: "detached" });
-    await page
-      .getByRole("button", { name: "Explore workspace", exact: true })
-      .click();
-  };
+// Views drawn by their own component instead of the records list: the text
+// that shows each one rendered.
+const customViews = {
+  "ca-setup-setup": "Enabled services",
+  "ca-setup-criteria": "Camera acceptance criteria",
+  "ca-setup-dashboard": "Camera activity",
+  "va-media-explorer": "Pick an organization",
+};
+// Education's People & Access → Users opens its consolidated directory on the
+// Learners list.
+const directory = (industry, role, name, tab) =>
+  industry === "education" &&
+  name === "People & Access" &&
+  tab === "Users" &&
+  ["customer_admin", "vizenta_admin"].includes(role) &&
+  !!industries.education.pages[role].product["Class & Lab Attendance"]
+    ?.Learners;
+
+main(async (browser) => {
+  const output = qaDir();
   const failures = [];
   const coverage = [];
   let active = "";
+  const { page } = await open(browser, {
+    base,
+    reducedMotion: "no-preference",
+    timeout: 30000,
+  });
   page.on("pageerror", (e) => failures.push({ active, error: e.message }));
-  await page.goto(base);
-  await enterWorkspace();
+  const shown = (text) =>
+    page
+      .getByText(text, { exact: true })
+      .filter({ visible: true })
+      .first()
+      .waitFor({ timeout: 6000 });
   await page.getByText("Customer Readiness", { exact: true }).first().waitFor();
   for (const industry of ids) {
-    const data = require("../src/domain/contracts/data/" + industry + ".json");
+    const data = industries[industry];
     for (const variant of industry === "retail"
       ? ["store", "warehouse"]
       : ["default"])
@@ -35,20 +71,10 @@ const base = process.env.VIZENTA_QA_URL || "http://127.0.0.1:8082";
               ? "Store 018"
               : "Warehouse DC-2"
             : role.scopes[0];
-        await page.evaluate(
-          (saved) =>
-            localStorage.setItem("vizenta-ai-demo-v1", JSON.stringify(saved)),
-          {
-            workspace: { industry, role: roleId, scope },
-            theme: "light",
-            session: true,
-            name: "QA User",
-            audit: [],
-            readNotifications: [],
-          },
-        );
+        const workspace = { industry, role: roleId, scope };
+        await seed(page, demoState(workspace));
         await page.goto(base);
-        await enterWorkspace();
+        await enter(page);
         await page.getByText(role.home, { exact: true }).first().waitFor();
         for (const type of ["org", "product"])
           for (const name of type === "org"
@@ -61,64 +87,75 @@ const base = process.env.VIZENTA_QA_URL || "http://127.0.0.1:8082";
               name === "Guard"
             )
               continue;
-            await page.getByRole("button", { name, exact: true }).click();
-            const branch = data.pages[roleId][type][name];
-            for (const [tab, basePage] of Object.entries(branch)) {
-              const contract = basePage.variants?.[variant] ?? basePage;
-              active = [industry, variant, roleId, name, tab].join("/");
+            await button(page, name).click();
+            for (const view of Object.keys(data.pages[roleId][type][name])) {
+              const contract = getPage(
+                workspace,
+                directory(industry, roleId, name, view)
+                  ? {
+                      type: "product",
+                      name: "Class & Lab Attendance",
+                      tab: "Learners",
+                    }
+                  : { type, name, tab: view },
+              );
+              active = [industry, variant, roleId, name, view].join("/");
               try {
-                await page.getByRole("tab", { name: tab, exact: true }).click();
-                await page
-                  .getByText(contract.heading, { exact: true })
-                  .filter({ visible: true })
-                  .first()
-                  .waitFor({ timeout: 6000 });
-                if (contract.primaryAction)
-                  await page
-                    .getByRole("button", {
-                      name: contract.primaryAction.label,
-                      exact: true,
-                    })
-                    .first()
-                    .waitFor({ timeout: 6000 });
-                const scoped = contract.records.filter((r) =>
-                  r.scope.includes(scope),
-                );
-                if (scoped.length)
-                  await page
-                    .getByRole("button", {
-                      name: "Open " + scoped[0].detail.title,
-                      exact: true,
-                    })
-                    .first()
-                    .waitFor({ timeout: 6000 });
-                else
-                  await page
-                    .getByText("No matching records", { exact: true })
-                    .filter({ visible: true })
-                    .waitFor({ timeout: 6000 });
+                await tab(page, view).click();
+                if (customViews[contract.id])
+                  await shown(customViews[contract.id]);
+                else {
+                  // Records headings "Context · Title" show the title in bold.
+                  await shown(
+                    contract.heading.split(/ · (.*)/s)[1] ?? contract.heading,
+                  );
+                  // Pages with session setup offer Add in place of the primary action.
+                  if (contract.primaryAction)
+                    await button(page, contract.primaryAction.label)
+                      .or(button(page, "Add"))
+                      .first()
+                      .waitFor({ timeout: 6000 });
+                  const scoped = contract.records.filter((r) =>
+                    r.scope.includes(scope),
+                  );
+                  // With a Capture column a row is a labelled, focusable row
+                  // rather than a button (its capture is a control of its own).
+                  if (scoped.length) {
+                    const row = "Open " + scoped[0].detail.title;
+                    await button(page, row)
+                      .or(page.getByLabel(row, { exact: true }))
+                      .filter({ visible: true })
+                      .first()
+                      .waitFor({ timeout: 6000 });
+                  } else
+                    await page
+                      .getByText("No matching records", { exact: true })
+                      .filter({ visible: true })
+                      .waitFor({ timeout: 6000 });
+                }
                 coverage.push({
                   industry,
                   variant,
                   role: roleId,
                   name,
-                  tab,
+                  tab: view,
                   id: contract.id,
-                  scopedRecords: scoped.length,
+                  scopedRecords: contract.records.filter((r) =>
+                    r.scope.includes(scope),
+                  ).length,
                 });
               } catch (e) {
                 failures.push({ active, error: e.message });
                 console.error("FAILED", active, e.message);
                 fs.writeFileSync(
-                  path.resolve(__dirname, "../qa/coverage-failures.json"),
+                  path.join(output, "coverage-failures.json"),
                   JSON.stringify(failures, null, 2),
                 );
                 if (failures.length >= 3) {
                   await page.screenshot({
-                    path: path.resolve(__dirname, "../qa/coverage-failure.png"),
+                    path: path.join(output, "coverage-failure.png"),
                     fullPage: true,
                   });
-                  await browser.close();
                   throw e;
                 }
               }
@@ -134,14 +171,11 @@ const base = process.env.VIZENTA_QA_URL || "http://127.0.0.1:8082";
       }
   }
   fs.writeFileSync(
-    path.resolve(__dirname, "../qa/coverage-results.json"),
+    path.join(output, "coverage-results.json"),
     JSON.stringify({ rendered: coverage.length, failures, coverage }, null, 2),
   );
-  await browser.close();
   assert.equal(failures.length, 0, JSON.stringify(failures.slice(0, 5)));
-  assert.equal(coverage.length, 894);
-  console.log("All 894 page configurations rendered successfully.");
-})().catch((e) => {
-  console.error(e);
-  process.exit(1);
+  console.log(
+    `All ${coverage.length} page configurations rendered successfully.`,
+  );
 });

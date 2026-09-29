@@ -1,110 +1,85 @@
+// Checks surveillance user management for Customer Admin (People & Access →
+// Users → Surveillance users; the Surveillance Users entry is gone for roles
+// with that directory) and Vizenta Admin (Surveillance Users): required fields,
+// create, edit, CSV upload, confirmed delete, and the phone form.
+//
+//   npm run test:surveillance-setup
 const assert = require("node:assert/strict");
-const { chromium } = require("playwright");
-(async () => {
-  const browser = await chromium.launch({ channel: "chrome", headless: true });
-  try {
-    for (const role of ["customer_admin", "vizenta_admin"]) {
-      const context = await browser.newContext({
-        viewport: { width: 1512, height: 982 },
-        reducedMotion: "reduce",
-      });
-      await context.addInitScript(
-        (role) =>
-          localStorage.setItem(
-            "vizenta-ai-demo-v1",
-            JSON.stringify({
-              workspace: {
-                industry: "education",
-                role,
-                scope:
-                  role === "vizenta_admin"
-                    ? "All customers"
-                    : "Across campuses",
-              },
-              theme: "light",
-            }),
-          ),
-        role,
-      );
-      const page = await context.newPage();
-      page.setDefaultTimeout(15000);
-      const errors = [];
-      page.on("pageerror", (e) => errors.push(e.message));
-      const b = (name) => page.getByRole("button", { name, exact: true });
-      await page.goto("http://localhost:8083", {
-        waitUntil: "domcontentloaded",
-        timeout: 60000,
-      });
-      await page.getByTestId("launch-screen").waitFor({ state: "detached" });
-      await b("Explore workspace").click();
-      await b("Surveillance Users").click();
-      await b("Add").click();
-      await b("Add user").click();
-      await page.getByText("UID is required", { exact: true }).waitFor();
-      await b(
-        (role === "vizenta_admin" ? "Customer" : "Campus") + ": Choose scope",
-      ).click();
-      await b(
-        role === "vizenta_admin" ? "Northbridge Education" : "Main Campus",
-      ).click();
-      for (const [name, value] of [
-        ["UID *", "QA-USER"],
-        ["First name *", "Quality"],
-        ["Email *", "qa@example.com"],
-      ])
-        await page.getByLabel(name, { exact: true }).fill(value);
-      await b("Add user").click();
-      const action = () =>
-        page
-          .getByRole("button", { name: /^Actions for Quality/ })
-          .filter({ visible: true });
-      await action().click();
-      await b("Edit").click();
-      await page.getByLabel("Phone", { exact: true }).fill("9876543210");
-      await b("Save changes").click();
-      await b("Bulk upload").click();
-      await b(
-        (role === "vizenta_admin" ? "Customer" : "Campus") + ": Choose scope",
-      ).click();
-      await b(
-        role === "vizenta_admin" ? "Northbridge Education" : "Main Campus",
-      ).click();
-      const chooser = page.waitForEvent("filechooser");
-      await b("Choose CSV file").click();
-      await (
-        await chooser
-      ).setFiles({
-        name: "users.csv",
-        mimeType: "text/csv",
-        buffer: Buffer.from(
-          "uid,first_name,email,user_type\nB,Bulk,bulk@example.com,Identified",
-        ),
-      });
-      await b("Save 1 users").click();
-      await action().click();
-      await b("Delete").click();
-      await b("Cancel").click();
-      await action().click();
-      await b("Delete").click();
-      await b("Delete").click();
-      assert.equal(await action().count(), 0);
-      await page.setViewportSize({ width: 390, height: 844 });
-      await b("Add").click();
-      await page.getByLabel("UID *", { exact: true }).waitFor();
-      assert.equal(
-        await page.evaluate(
-          () => document.documentElement.scrollWidth > innerWidth,
-        ),
-        false,
-      );
-      assert.deepEqual(errors, []);
-      console.log(role + ": surveillance CRUD, CSV and mobile passed");
-      await context.close();
+const {
+  PHONE,
+  field,
+  fillForm,
+  main,
+  noOverflow,
+  open,
+  rowAction,
+  tab,
+  uploadCsv,
+} = require("./lib/qa.cjs");
+
+main(async (browser) => {
+  for (const role of ["customer_admin", "vizenta_admin"]) {
+    const admin = role === "vizenta_admin";
+    const { context, page, button, errors } = await open(browser, {
+      state: {
+        workspace: {
+          industry: "education",
+          role,
+          scope: admin ? "All customers" : "Across campuses",
+        },
+        theme: "light",
+      },
+    });
+    const user = /^Actions for Quality/;
+    const scope = async () => {
+      await button((admin ? "Customer" : "Campus") + ": Choose scope").click();
+      await button(admin ? "Northbridge Education" : "Main Campus").click();
+    };
+    if (admin) await button("Surveillance Users").click();
+    else {
+      await button("People & Access").click();
+      await tab(page, "Users").click();
+      await button("User directory: Learners").click();
+      await button("Surveillance users").click();
     }
-  } finally {
-    await browser.close();
+    await button("Add").click();
+    await button("Add user").click();
+    await page.getByText("UID is required", { exact: true }).waitFor();
+    await scope();
+    await fillForm(page, {
+      "UID *": "QA-USER",
+      "First name *": "Quality",
+      "Email *": "qa@example.com",
+    });
+    await button("Add user").click();
+    await rowAction(page, user, "Edit");
+    await field(page, "Phone").fill("9876543210");
+    await button("Save changes").click();
+    await button("Bulk upload").click();
+    await scope();
+    await uploadCsv(
+      page,
+      "users.csv",
+      "uid,first_name,email,user_type\nB,Bulk,bulk@example.com,Identified",
+    );
+    await button("Save 1 users").click();
+    await rowAction(page, user, "Delete");
+    await button("Cancel").click();
+    await rowAction(page, user, "Delete");
+    await button("Delete").click();
+    assert.equal(
+      await page
+        .getByRole("button", { name: user })
+        .filter({ visible: true })
+        .count(),
+      0,
+    );
+    await page.setViewportSize(PHONE);
+    await button("Add").click();
+    await field(page, "UID *").waitFor();
+    assert.ok(await noOverflow(page));
+    assert.deepEqual(errors, []);
+    console.log(role + ": surveillance CRUD, CSV and mobile passed");
+    await context.close();
   }
-})().catch((e) => {
-  console.error(e);
-  process.exitCode = 1;
 });

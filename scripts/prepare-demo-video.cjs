@@ -1,9 +1,9 @@
 // Regenerate local 1080p demo clips from the source documented in assets/media/README.md.
 // Usage: node scripts/prepare-demo-video.cjs <ffmpeg executable> <source.mp4>
-const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { ASS_HEADER, runner } = require("./lib/ffmpeg.cjs");
 const { detectionStyles } = require("../src/domain/contracts/detectionDemo.ts");
 const [ffmpeg, source] = process.argv.slice(2);
 if (!ffmpeg || !source)
@@ -36,22 +36,14 @@ function at(frames, t) {
 const time = (t) => `0:00:${t.toFixed(2).padStart(5, "0")}`;
 const color = (hex) =>
   "&H" + hex.slice(5, 7) + hex.slice(3, 5) + hex.slice(1, 3) + "&";
-const header = `[Script Info]\nPlayResX: 1920\nPlayResY: 1080\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,30,&H00FFFFFF,&H00FFFFFF,&H00102030,&H00102030,-1,0,0,0,100,100,0,0,1,2,0,7,0,0,0,1\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n`;
-function run(args) {
-  const result = spawnSync(
-    ffmpeg,
-    ["-hide_banner", "-loglevel", "error", "-y", ...args],
-    { cwd: temp, stdio: "inherit" },
-  );
-  if (result.status !== 0) throw new Error("Video conversion failed");
-}
+const run = runner(ffmpeg, { cwd: temp });
 [
   ["identified", "visitor"],
   ["threat", "identified"],
   ["unidentified", "visitor"],
   ["visitor", "unidentified"],
 ].forEach((kinds, index) => {
-  let ass = header;
+  let ass = ASS_HEADER;
   const event = (start, end, text) => {
     ass += `Dialogue: 0,${time(start)},${time(end)},Default,,0,0,0,,${text}\n`;
   };

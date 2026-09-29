@@ -3,10 +3,10 @@
 // Writes assets/media/still-*.jpg (1280x720, demo banner burned in) and
 // src/features/workspace/components/demoCaptures.ts (person boxes, drawn by the UI).
 // The gate-*.mp4 clips and their capture-*.jpg posters are not touched.
-const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { ASS_HEADER, runner } = require("./lib/ffmpeg.cjs");
 const [ffmpeg, footage] = process.argv.slice(2);
 if (!ffmpeg || !footage)
   throw new Error("Provide ffmpeg and the downloaded source video");
@@ -23,29 +23,61 @@ const scenes = [
   { id: "w5", gender: "woman", t: 14.3, box: [49.5, 37, 14.5, 62.5] },
   { id: "w6", gender: "woman", t: 16.2, box: [39.5, 31.5, 25.5, 68] },
   { id: "w7", gender: "woman", t: 19.0, box: [42, 44.5, 6.5, 29] },
-  { id: "w8", gender: "woman", image: art("surveillance-lobby-front.png"), box: [42.5, 49, 7.5, 33.5] },
-  { id: "m1", gender: "man", image: art("surveillance-lobby-front.png"), box: [26, 33.5, 6.5, 29.5] },
-  { id: "m2", gender: "man", image: art("surveillance-lobby-front.png"), box: [63.5, 40.5, 7.5, 33] },
-  { id: "m3", gender: "man", image: art("education-surveillance.png"), box: [32.5, 27.5, 10.5, 51] },
-  { id: "m4", gender: "man", image: art("education-classroom.png"), box: [0.5, 27, 20.5, 72.5] },
-  { id: "m5", gender: "man", image: art("education-classroom.png"), box: [76, 27, 23.5, 72.5] },
-  { id: "m6", gender: "man", image: art("education-classroom.png"), box: [54, 24.5, 8.5, 26.5] },
-  { id: "m7", gender: "man", image: art("options/camera-view.png"), box: [63.5, 44.5, 6, 25.5] },
+  {
+    id: "w8",
+    gender: "woman",
+    image: art("surveillance-lobby-front.png"),
+    box: [42.5, 49, 7.5, 33.5],
+  },
+  {
+    id: "m1",
+    gender: "man",
+    image: art("surveillance-lobby-front.png"),
+    box: [26, 33.5, 6.5, 29.5],
+  },
+  {
+    id: "m2",
+    gender: "man",
+    image: art("surveillance-lobby-front.png"),
+    box: [63.5, 40.5, 7.5, 33],
+  },
+  {
+    id: "m3",
+    gender: "man",
+    image: art("education-surveillance.png"),
+    box: [32.5, 27.5, 10.5, 51],
+  },
+  {
+    id: "m4",
+    gender: "man",
+    image: art("education-classroom.png"),
+    box: [0.5, 27, 20.5, 72.5],
+  },
+  {
+    id: "m5",
+    gender: "man",
+    image: art("education-classroom.png"),
+    box: [76, 27, 23.5, 72.5],
+  },
+  {
+    id: "m6",
+    gender: "man",
+    image: art("education-classroom.png"),
+    box: [54, 24.5, 8.5, 26.5],
+  },
+  {
+    id: "m7",
+    gender: "man",
+    image: art("options/camera-view.png"),
+    box: [63.5, 44.5, 6, 25.5],
+  },
 ];
-const header = `[Script Info]\nPlayResX: 1920\nPlayResY: 1080\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,30,&H00FFFFFF,&H00FFFFFF,&H00102030,&H00102030,-1,0,0,0,100,100,0,0,1,2,0,7,0,0,0,1\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n`;
-function run(args) {
-  const result = spawnSync(
-    ffmpeg,
-    ["-hide_banner", "-loglevel", "error", "-y", ...args],
-    { cwd: temp, stdio: "inherit" },
-  );
-  if (result.status !== 0) throw new Error("Still conversion failed");
-}
+const run = runner(ffmpeg, { cwd: temp });
 scenes.forEach((scene, index) => {
   const camera = String(index + 5).padStart(2, "0");
   fs.writeFileSync(
     path.join(temp, `banner-${scene.id}.ass`),
-    header +
+    ASS_HEADER +
       `Dialogue: 0,0:00:00.00,0:00:10.00,Default,,0,0,0,,{\\pos(36,28)\\fs28}DEMO CAMERA ${camera}  |  SIMULATED DETECTIONS\n` +
       `Dialogue: 0,0:00:00.00,0:00:10.00,Default,,0,0,0,,{\\pos(36,70)\\fs23}Sample footage - classifications are fictional\n`,
   );
@@ -86,4 +118,6 @@ fs.writeFileSync(
   path.join(root, "src/features/workspace/components/demoCaptures.ts"),
   generated,
 );
-console.log(`Prepared ${scenes.length} 1280x720 demo stills and their person boxes.`);
+console.log(
+  `Prepared ${scenes.length} 1280x720 demo stills and their person boxes.`,
+);

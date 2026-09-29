@@ -5,9 +5,9 @@
 //   assets/media/frames/thumbs/*.jpg       480x270 grid thumbnails (clip frames and stills)
 //   src/domain/media/framePool.json        scenes: which frames a camera shows, in order, with sizes
 //   src/features/workspace/components/mediaFrameSources.ts  bundled sources for each frame file
-const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
+const { runner } = require("./lib/ffmpeg.cjs");
 const [ffmpeg] = process.argv.slice(2);
 if (!ffmpeg) throw new Error("Provide an ffmpeg executable");
 const root = path.resolve(__dirname, "..");
@@ -16,16 +16,7 @@ const out = path.join(media, "frames");
 const thumbs = path.join(out, "thumbs");
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(thumbs, { recursive: true });
-function run(args) {
-  const result = spawnSync(
-    ffmpeg,
-    ["-hide_banner", "-loglevel", "error", "-y", ...args],
-    {
-      stdio: "inherit",
-    },
-  );
-  if (result.status !== 0) throw new Error("ffmpeg failed: " + args.join(" "));
-}
+const run = runner(ffmpeg);
 const FPS = 2;
 const CLIP_FRAMES = 16; // 8 s clips at 2 fps
 // Each clip already carries its tracking boxes, so its frames are drawn as they are.
@@ -54,24 +45,12 @@ for (const clip of [1, 2, 3]) {
     path.join(thumbs, `clip${clip}-%02d.jpg`),
   ]);
 }
-// Stills are reused at full size; only a grid thumbnail is added. The UI draws their box.
-const stills = [
-  "w1",
-  "w2",
-  "w3",
-  "w4",
-  "w5",
-  "w6",
-  "w7",
-  "w8",
-  "m1",
-  "m2",
-  "m3",
-  "m4",
-  "m5",
-  "m6",
-  "m7",
-];
+// Stills (from prepare-demo-captures.cjs) are reused at full size; only a grid
+// thumbnail is added. The UI draws their box.
+const stills = fs
+  .readdirSync(media)
+  .map((file) => /^still-(\w+)\.jpg$/.exec(file)?.[1])
+  .filter(Boolean);
 for (const id of stills)
   run([
     "-i",

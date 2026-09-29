@@ -1,76 +1,42 @@
-const { chromium } = require("playwright");
+// Checks the GitHub Pages build: dist-pages/ served below /Protoype like the
+// static host (VIZENTA_PAGES_URL checks a deployment instead). Routes and
+// refreshes, the login images and favicon, workspace entry and the phone
+// layout, with no page errors or failed requests.
+//
+//   npm run build:pages && npm run test:pages
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const http = require("node:http");
 const path = require("node:path");
-
-const root = path.resolve(__dirname, "../dist-pages");
-const output = path.resolve(__dirname, "../qa");
+const {
+  DESKTOP,
+  PHONE,
+  button,
+  main,
+  noOverflow,
+  qaDir,
+  shooter,
+  waitForLogin,
+  watch,
+} = require("./lib/qa.cjs");
+const { startStatic } = require("./lib/static-server.cjs");
 const prefix = process.env.VIZENTA_WEB_BASE_URL ?? "/Protoype";
-const types = {
-  ".html": "text/html",
-  ".js": "text/javascript",
-  ".json": "application/json",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".otf": "font/otf",
-  ".ttf": "font/ttf",
-};
+const deployed = process.env.VIZENTA_PAGES_URL?.replace(/\/$/, "");
 
-(async () => {
-  let server;
-  let browser;
-  try {
-    let base = process.env.VIZENTA_PAGES_URL?.replace(/\/$/, "");
-    if (!base) {
-      // Match static hosting: nested routes must have their own HTML entry point.
-      server = http.createServer((request, response) => {
-        const pathname = new URL(request.url, "http://localhost").pathname;
-        if (!pathname.startsWith(`${prefix}/`)) {
-          response.writeHead(404).end();
-          return;
-        }
-        let file = path.resolve(
-          root,
-          "." + decodeURIComponent(pathname.slice(prefix.length)),
-        );
-        if (file !== root && !file.startsWith(root + path.sep)) {
-          response.writeHead(403).end();
-          return;
-        }
-        if (fs.existsSync(file) && fs.statSync(file).isDirectory())
-          file = path.join(file, "index.html");
-        if (!fs.existsSync(file)) {
-          response.writeHead(404, { "Content-Type": "text/html" });
-          file = path.join(root, "404.html");
-        } else
-          response.setHeader(
-            "Content-Type",
-            types[path.extname(file)] ?? "application/octet-stream",
-          );
-        fs.createReadStream(file).pipe(response);
+main(async (browser) => {
+  // Match static hosting: nested routes must have their own HTML entry point.
+  const server = deployed
+    ? undefined
+    : await startStatic({
+        root: path.resolve(__dirname, "../dist-pages"),
+        prefix,
+        spa: false,
       });
-      await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-      base = `http://127.0.0.1:${server.address().port}${prefix}`;
-    }
-    fs.mkdirSync(output, { recursive: true });
-    browser = await chromium.launch({ channel: "chrome", headless: true });
-    const page = await browser.newPage({
-      viewport: { width: 1512, height: 982 },
-    });
-    const errors = [];
-    page.on("pageerror", (e) => errors.push(e.message));
-    page.on("response", (response) => {
-      if (response.url().startsWith(base) && response.status() >= 400) {
-        errors.push(`${response.status()} ${response.url()}`);
-      }
-    });
-    const button = (name) => page.getByRole("button", { name, exact: true });
-    const ready = async () => {
-      await button("Sign in").waitFor();
-      await page.getByTestId("launch-screen").waitFor({ state: "detached" });
-    };
-    const artwork = async () =>
+  try {
+    const base = deployed || server.base;
+    const shot = shooter(qaDir());
+    const page = await browser.newPage({ viewport: DESKTOP });
+    const errors = watch(page, [], { responses: base });
+    // One image per login slide (src/features/workspace/model/authUseCases.ts).
+    const artwork = () =>
       page.waitForFunction(() => {
         const images = [
           ...document.querySelectorAll(
@@ -78,12 +44,12 @@ const types = {
           ),
         ];
         return (
-          images.length === 4 &&
+          images.length === 2 &&
           images.every((img) => img.complete && img.naturalWidth > 0)
         );
       });
     assert.equal((await page.goto(base + "/")).status(), 200);
-    await ready();
+    await waitForLogin(page);
     await artwork();
     assert.equal(await page.title(), "Vizenta AI");
     const favicon = await page.locator('link[rel="icon"]').getAttribute("href");
@@ -92,48 +58,33 @@ const types = {
       (await page.request.get(new URL(favicon, base).href)).status(),
       200,
     );
-    await page.screenshot({
-      path: path.join(output, "pages-login-desktop.png"),
-    });
-    await button("Signup here").click();
+    await shot(page, "pages-login-desktop");
+    await button(page, "Signup here").click();
     await page.getByText("Create your account", { exact: true }).waitFor();
     assert.ok(page.url().startsWith(base + "/register"));
     assert.equal((await page.reload()).status(), 200);
     await page.getByText("Create your account", { exact: true }).waitFor();
     assert.equal((await page.goto(base + "/forgot-password/")).status(), 200);
-    await button("Continue").waitFor();
+    await button(page, "Continue").waitFor();
     assert.equal((await page.goto(base + "/login/")).status(), 200);
-    await ready();
-    await button("Explore workspace").click();
+    await waitForLogin(page);
+    await button(page, "Explore workspace").click();
     await page
       .getByText("Customer Readiness", { exact: true })
       .first()
       .waitFor();
     assert.ok(page.url().startsWith(base + "/"));
     assert.equal((await page.reload()).status(), 200);
-    await ready();
-    await page.setViewportSize({ width: 390, height: 844 });
+    await waitForLogin(page);
+    await page.setViewportSize(PHONE);
     await artwork();
-    assert.equal(
-      await page.evaluate(
-        () =>
-          document.documentElement.scrollWidth <= innerWidth &&
-          document.documentElement.scrollHeight <= innerHeight,
-      ),
-      true,
-    );
-    await page.screenshot({
-      path: path.join(output, "pages-login-mobile.png"),
-    });
+    assert.equal(await noOverflow(page, { vertical: true }), true);
+    await shot(page, "pages-login-mobile");
     assert.deepEqual(errors, []);
     console.log(
       `Pages checks passed: ${base}/ (routes, refresh, images, favicon, workspace entry, mobile layout).`,
     );
   } finally {
-    if (browser) await browser.close();
-    if (server) await new Promise((resolve) => server.close(resolve));
+    await server?.close();
   }
-})().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
 });

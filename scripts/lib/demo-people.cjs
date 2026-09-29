@@ -9,20 +9,15 @@ const path = require("node:path");
 const src = path.resolve(__dirname, "../../src");
 const load = (file) => require(path.join(src, file));
 
-/** Text of a cell, fact or panel value (same as logic.cellText, plus secondary/meta lines). */
+const { cellText } = load("domain/contracts/logic.ts");
+/** Text of a cell, fact or panel value, plus its secondary and meta lines. */
 function texts(value) {
   if (value == null) return [];
-  if (typeof value !== "object") return [String(value)];
-  const out = [String(value.primary ?? value.label ?? value.value ?? "—")];
-  for (const extra of [value.secondary, value.meta]) if (typeof extra === "string") out.push(extra);
+  const out = [cellText(value)];
+  if (typeof value === "object")
+    for (const extra of [value.secondary, value.meta]) if (typeof extra === "string") out.push(extra);
   return out;
 }
-
-/** Pages whose rows are class or lab sessions (mirrors src/domain/classes/attendance.ts). */
-const sessionRowsOf = (industries) =>
-  Object.values(industries.education.pages).flatMap((areas) =>
-    ["Classes", "Labs"].flatMap((tab) => areas.product["Class & Lab Attendance"]?.[tab]?.records ?? []),
-  );
 
 let cached;
 /**
@@ -36,13 +31,13 @@ let cached;
 function scanDemoPeople() {
   if (cached) return cached;
   const reg = load("domain/contracts/registry.ts");
-  const { classSession } = load("domain/classes/attendance.ts");
+  const { classSession, sessionRows } = load("domain/classes/attendance.ts");
   const { parsePersonName } = load("shared/people/personName.ts");
   const samples = load("domain/surveillance/samples.json");
   const { industries, getPage } = reg;
   // Session rows before any page is expanded: a session without its own count
   // borrows one from a sibling row, so rosters are computed for both states.
-  const authoredSessionRows = sessionRowsOf(industries).slice();
+  const authoredSessionRows = sessionRows(industries.education).slice();
 
   const persons = new Map();
   const pages = [];
@@ -111,7 +106,7 @@ function scanDemoPeople() {
 
   // Class and lab sessions: each session's learners (ClassAttendance), its mapped
   // learners (ClassLearners) and its row's own people as one page.
-  const expandedSessionRows = sessionRowsOf(industries);
+  const expandedSessionRows = sessionRows(industries.education);
   const sessions = [];
   for (const entry of pages.filter((e) => e.industry === "education"))
     for (const record of entry.page.records ?? []) {

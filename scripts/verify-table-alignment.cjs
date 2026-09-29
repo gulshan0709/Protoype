@@ -8,41 +8,66 @@
 // VIZENTA_QA_URL overrides the default http://localhost:8083.
 const fs = require("node:fs");
 const path = require("node:path");
-const { chromium } = require("playwright");
-const base = (process.env.VIZENTA_QA_URL || "http://localhost:8083").replace(
-  /\/$/,
-  "",
-);
+const {
+  demoState,
+  main,
+  open,
+  qaDir,
+  records,
+  route,
+  slug,
+} = require("./lib/qa.cjs");
 const crawl = process.argv.includes("--all");
 const allShots = process.argv.includes("--shots");
-const output = path.resolve(__dirname, "../qa/tables");
-const allDir = path.join(output, "all");
-fs.mkdirSync(allShots ? allDir : output, { recursive: true });
+const output = qaDir("tables");
+const allDir = allShots ? qaDir("tables/all") : path.join(output, "all");
 const TOLERANCE = 2;
-const slug = (s) =>
-  s
-    .replace(/[^a-z0-9]+/gi, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase();
-
-const scopeOf = (industry, role) =>
-  require(`../src/domain/contracts/data/${industry}.json`).core.roles[role]
-    .scopes[0];
-const workspace = (industry, role = "customer_admin") => ({
-  industry,
-  role,
-  scope: scopeOf(industry, role),
-});
 const desktop = { width: 1512, height: 1300 };
 const cases = [
-  ["education", "product", "Gate", "User Attendance", [desktop, { width: 1280, height: 1100 }, { width: 1024, height: 1100 }, { width: 800, height: 1100 }, { width: 390, height: 844 }]],
-  ["education", "product", "Gate", "In/Out", [desktop, { width: 390, height: 844 }]],
+  [
+    "education",
+    "product",
+    "Gate",
+    "User Attendance",
+    [
+      desktop,
+      { width: 1280, height: 1100 },
+      { width: 1024, height: 1100 },
+      { width: 800, height: 1100 },
+      { width: 390, height: 844 },
+    ],
+  ],
+  [
+    "education",
+    "product",
+    "Gate",
+    "In/Out",
+    [desktop, { width: 390, height: 844 }],
+  ],
   ["education", "product", "Class & Lab Attendance", "Coverage", [desktop]],
-  ["education", "product", "Warden", "Leave Management", [desktop, { width: 390, height: 844 }]],
+  [
+    "education",
+    "product",
+    "Warden",
+    "Leave Management",
+    [desktop, { width: 390, height: 844 }],
+  ],
   ["education", "org", "People & Access", "Users", [desktop]],
-  ["corporate", "product", "Gate", "Live Presence", [desktop, { width: 390, height: 844 }]],
+  [
+    "corporate",
+    "product",
+    "Gate",
+    "Live Presence",
+    [desktop, { width: 390, height: 844 }],
+  ],
   ["retail", "product", "Workforce Attendance", "Shift", [desktop]],
-  ["manufacturing", "product", "Workforce Attendance", "Coverage", [desktop, { width: 800, height: 1100 }]],
+  [
+    "manufacturing",
+    "product",
+    "Workforce Attendance",
+    "Coverage",
+    [desktop, { width: 800, height: 1100 }],
+  ],
 ];
 
 /** Runs in the page: measures the visible records table. */
@@ -116,7 +141,9 @@ function measureTable(tolerance) {
     );
   const kind = (el, prefix) =>
     el.getAttribute("data-testid").slice(prefix.length) || "column";
-  const head = [...header.querySelectorAll('[data-testid^="records-head-cell"]')];
+  const head = [
+    ...header.querySelectorAll('[data-testid^="records-head-cell"]'),
+  ];
   const headKinds = head.map((el) => kind(el, "records-head-cell"));
   // Header labels share one style and are uppercase.
   const labelled = head
@@ -130,9 +157,13 @@ function measureTable(tolerance) {
     let t = el;
     while (t.firstElementChild) t = t.firstElementChild;
     const s = getComputedStyle(t);
-    return [s.fontFamily, s.fontSize, s.fontWeight, s.color, s.textTransform].join(
-      " | ",
-    );
+    return [
+      s.fontFamily,
+      s.fontSize,
+      s.fontWeight,
+      s.color,
+      s.textTransform,
+    ].join(" | ");
   };
   const firstStyle = labelled[0] && styleOf(labelled[0].el);
   for (const { el, text } of labelled) {
@@ -141,9 +172,9 @@ function measureTable(tolerance) {
     if (styleOf(el) !== firstStyle)
       result.issues.push(`header "${text}" style differs: ${styleOf(el)}`);
   }
-  const rows = [...table.querySelectorAll('[data-testid="records-row"]')].filter(
-    shown,
-  );
+  const rows = [
+    ...table.querySelectorAll('[data-testid="records-row"]'),
+  ].filter(shown);
   result.rows = rows.length;
   const heights = [];
   rows.forEach((row, index) => {
@@ -192,44 +223,15 @@ function measureTable(tolerance) {
   return result;
 }
 
-(async () => {
-  const browser = await chromium.launch({ channel: "chrome", headless: true });
+main(async (browser) => {
   const failures = [];
   const report = [];
   const errors = [];
   let checked = 0;
-  const open = async (ws, viewport, query = "") => {
-    const context = await browser.newContext({
-      viewport,
-      reducedMotion: "reduce",
-    });
-    await context.addInitScript(
-      (workspace) =>
-        localStorage.setItem(
-          "vizenta-ai-demo-v1",
-          JSON.stringify({
-            workspace,
-            theme: "light",
-            name: "QA User",
-            audit: [],
-            readNotifications: [],
-          }),
-        ),
-      ws,
-    );
-    const page = await context.newPage();
-    page.setDefaultTimeout(15000);
-    page.on("pageerror", (e) => errors.push(e.message));
-    await page.goto(base + "/" + query, {
-      waitUntil: "domcontentloaded",
-      timeout: 60000,
-    });
-    await page.getByTestId("launch-screen").waitFor({ state: "detached" });
-    await page
-      .getByRole("button", { name: "Explore workspace", exact: true })
-      .click();
-    return { context, page };
-  };
+  // A Customer Admin page at `url` (every fresh load opens login; this uses
+  // Explore workspace).
+  const openTable = (industry, viewport, url) =>
+    open(browser, { url, viewport, state: demoState({ industry }), errors });
   // Measure until two consecutive reads agree (columns size to their content).
   const settle = async (page) => {
     let last = "";
@@ -252,10 +254,11 @@ function measureTable(tolerance) {
     console.log(
       `${status} ${label} · ${result.mode}${result.rows ? ` · ${result.rows} rows` : ""}${result.headers ? ` · [${result.headers.join(" | ")}]` : ""}${result.notes.length ? ` · ${result.notes.join("; ")}` : ""}`,
     );
-    for (const issue of result.issues.slice(0, 8)) console.log("       " + issue);
+    for (const issue of result.issues.slice(0, 8))
+      console.log("       " + issue);
     if (result.issues.length) failures.push({ label, issues: result.issues });
     if (shot || result.issues.length) {
-      const table = page.getByTestId("records-table").filter({ visible: true });
+      const table = records(page);
       if (await table.count())
         await table
           .first()
@@ -270,131 +273,127 @@ function measureTable(tolerance) {
     }
     return result;
   };
-  try {
-    for (const [industry, type, name, tab, viewports] of cases) {
-      for (const viewport of viewports) {
-        const query =
-          "?type=" +
-          type +
-          "&name=" +
-          encodeURIComponent(name) +
-          "&tab=" +
-          encodeURIComponent(tab);
-        const { context, page } = await open(workspace(industry), viewport, query);
-        try {
-          await page
-            .getByRole("tab", { name: tab, exact: true, selected: true })
-            .waitFor();
-          await page
-            .getByTestId("records-table")
-            .filter({ visible: true })
-            .first()
-            .waitFor();
+  for (const [industry, type, name, tab, viewports] of cases) {
+    for (const viewport of viewports) {
+      const { context, page } = await openTable(
+        industry,
+        viewport,
+        route({ type, name, tab }),
+      );
+      try {
+        await page
+          .getByRole("tab", { name: tab, exact: true, selected: true })
+          .waitFor();
+        await records(page).first().waitFor();
+        await record(
+          page,
+          `${industry} ${name} ${tab} ${viewport.width}`,
+          output,
+        );
+        // Absent people (with a trailing Mark attendance action) follow the
+        // present ones; page forward to the rows that mix both.
+        if (tab === "User Attendance" && viewport.width >= 768) {
+          const mark = page
+            .getByRole("button", { name: "Mark attendance", exact: true })
+            .filter({ visible: true });
+          for (let i = 0; i < 6 && !(await mark.count()); i++)
+            await page
+              .getByRole("button", { name: "Next", exact: true })
+              .filter({ visible: true })
+              .click();
+          if (!(await mark.count()))
+            throw new Error("No rows with Mark attendance found");
           await record(
             page,
-            `${industry} ${name} ${tab} ${viewport.width}`,
+            `${industry} ${name} ${tab} absent rows ${viewport.width}`,
             output,
           );
-          // Absent people (with a trailing Mark attendance action) follow the
-          // present ones; page forward to the rows that mix both.
-          if (tab === "User Attendance" && viewport.width >= 768) {
-            const mark = page
-              .getByRole("button", { name: "Mark attendance", exact: true })
-              .filter({ visible: true });
-            for (let i = 0; i < 6 && !(await mark.count()); i++)
-              await page
-                .getByRole("button", { name: "Next", exact: true })
-                .filter({ visible: true })
-                .click();
-            if (!(await mark.count()))
-              throw new Error("No rows with Mark attendance found");
-            await record(
-              page,
-              `${industry} ${name} ${tab} absent rows ${viewport.width}`,
-              output,
-            );
-          }
-        } catch (e) {
-          failures.push({ label: `${industry} ${name} ${tab}`, issues: [e.message] });
-          console.log(`FAIL ${industry} ${name} ${tab} ${viewport.width}: ${e.message}`);
-        } finally {
-          await context.close();
         }
+      } catch (e) {
+        failures.push({
+          label: `${industry} ${name} ${tab}`,
+          issues: [e.message],
+        });
+        console.log(
+          `FAIL ${industry} ${name} ${tab} ${viewport.width}: ${e.message}`,
+        );
+      } finally {
+        await context.close();
       }
     }
-    if (crawl)
-      for (const industry of ["education", "corporate", "retail", "manufacturing"]) {
-        const { context, page } = await open(workspace(industry), desktop);
-        try {
-          const sidebar = page.getByTestId("reference-sidebar");
-          await sidebar.waitFor();
-          const destinations = await sidebar.evaluate((el) =>
-            [...el.querySelectorAll('[role="button"][aria-label]')]
-              .map((b) => b.getAttribute("aria-label"))
-              .filter(
-                (n) =>
-                  !/^(Switch workspace|Ask Vizenta|Settings and preferences|Collapse|Expand)/.test(
-                    n,
-                  ),
-              ),
-          );
-          for (const name of destinations) {
-            await sidebar.getByRole("button", { name, exact: true }).click();
-            const tablist = page.getByRole("tablist", {
-              name: `${name} views`,
-              exact: true,
-            });
-            await tablist.waitFor();
-            const tabs = await tablist
-              .getByRole("tab")
-              .evaluateAll((els) => els.map((t) => t.getAttribute("aria-label")));
-            for (const tab of tabs) {
-              await tablist.getByRole("tab", { name: tab, exact: true }).click();
-              await page
-                .getByRole("tab", { name: tab, exact: true, selected: true })
-                .waitFor();
-              await page.waitForTimeout(250);
-              const hasTable = await page
-                .getByTestId("records-table")
-                .filter({ visible: true })
-                .count();
-              if (!hasTable) {
-                console.log(`--   ${industry} ${name} ${tab} · custom view`);
-                if (allShots)
-                  await page.screenshot({
-                    path: path.join(allDir, slug(`${industry} ${name} ${tab}`) + ".png"),
-                  });
-                continue;
-              }
-              await record(
-                page,
-                `${industry} ${name} ${tab}`,
-                allShots ? allDir : undefined,
-              );
-            }
-          }
-        } finally {
-          await context.close();
-        }
-      }
-    if (errors.length) failures.push({ label: "page errors", issues: errors });
-    fs.writeFileSync(
-      path.join(output, "results.json"),
-      JSON.stringify({ checked, failures, report }, null, 2),
-    );
-    if (failures.length) {
-      console.error(
-        `\n${failures.length} of ${checked} table checks failed. See qa/tables/results.json.`,
-      );
-      process.exitCode = 1;
-    } else
-      console.log(
-        `\nAll ${checked} table checks aligned within ${TOLERANCE}px. Screenshots in qa/tables/.`,
-      );
-  } finally {
-    await browser.close();
   }
-})().catch((e) => {
-  console.error(e);
-  process.exitCode = 1;
+  if (crawl)
+    for (const industry of [
+      "education",
+      "corporate",
+      "retail",
+      "manufacturing",
+    ]) {
+      const { context, page } = await openTable(industry, desktop);
+      try {
+        const sidebar = page.getByTestId("reference-sidebar");
+        await sidebar.waitFor();
+        const destinations = await sidebar.evaluate((el) =>
+          [...el.querySelectorAll('[role="button"][aria-label]')]
+            .map((b) => b.getAttribute("aria-label"))
+            .filter(
+              (n) =>
+                !/^(Switch workspace|Ask Vizenta|Settings and preferences|Collapse|Expand)/.test(
+                  n,
+                ),
+            ),
+        );
+        for (const name of destinations) {
+          await sidebar.getByRole("button", { name, exact: true }).click();
+          const tablist = page.getByRole("tablist", {
+            name: `${name} views`,
+            exact: true,
+          });
+          await tablist.waitFor();
+          const tabs = await tablist
+            .getByRole("tab")
+            .evaluateAll((els) => els.map((t) => t.getAttribute("aria-label")));
+          for (const tab of tabs) {
+            await tablist.getByRole("tab", { name: tab, exact: true }).click();
+            await page
+              .getByRole("tab", { name: tab, exact: true, selected: true })
+              .waitFor();
+            await page.waitForTimeout(250);
+            const hasTable = await records(page).count();
+            if (!hasTable) {
+              console.log(`--   ${industry} ${name} ${tab} · custom view`);
+              if (allShots)
+                await page.screenshot({
+                  path: path.join(
+                    allDir,
+                    slug(`${industry} ${name} ${tab}`) + ".png",
+                  ),
+                });
+              continue;
+            }
+            await record(
+              page,
+              `${industry} ${name} ${tab}`,
+              allShots ? allDir : undefined,
+            );
+          }
+        }
+      } finally {
+        await context.close();
+      }
+    }
+  if (errors.length) failures.push({ label: "page errors", issues: errors });
+  fs.writeFileSync(
+    path.join(output, "results.json"),
+    JSON.stringify({ checked, failures, report }, null, 2),
+  );
+  if (failures.length) {
+    console.error(
+      `\n${failures.length} of ${checked} table checks failed. See qa/tables/results.json.`,
+    );
+    process.exitCode = 1;
+  } else
+    console.log(
+      `\nAll ${checked} table checks aligned within ${TOLERANCE}px. Screenshots in qa/tables/.`,
+    );
 });

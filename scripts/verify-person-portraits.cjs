@@ -7,25 +7,21 @@
 // VIZENTA_QA_URL overrides the default http://localhost:8083. Screenshots are
 // saved to qa/person-portraits/.
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const { chromium } = require("playwright");
-const base = (process.env.VIZENTA_QA_URL || "http://localhost:8083").replace(
-  /\/$/,
-  "",
-);
-const output = path.resolve(__dirname, "../qa/person-portraits");
-fs.mkdirSync(output, { recursive: true });
-const slug = (s) =>
-  s
-    .replace(/[^a-z0-9]+/gi, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase();
-const scopeOf = (industry, role) =>
-  require(`../src/domain/contracts/data/${industry}.json`).core.roles[role]
-    .scopes[0];
+const {
+  PHONE,
+  button,
+  demoState,
+  main,
+  open,
+  qaDir,
+  records,
+  route,
+  rows,
+  shooter,
+  slug,
+} = require("./lib/qa.cjs");
+const shot = shooter(qaDir("person-portraits"));
 const desktop = { width: 1512, height: 1100 };
-const mobile = { width: 390, height: 844 };
 // [industry, role, type, destination, tab, person column headers, extra columns to show]
 const cases = [
   ["education", "customer_admin", "org", "People & Access", "Users", ["USER"]],
@@ -125,86 +121,33 @@ function measureAvatars(headers) {
   };
 }
 
-(async () => {
-  const browser = await chromium.launch({ channel: "chrome", headless: true });
+main(async (browser) => {
   const errors = [];
   const failures = [];
-  const open = async ([industry, role, type, name, tab], viewport) => {
-    const context = await browser.newContext({
+  // Every fresh load opens the login screen; these sign in with a password.
+  const openCase = async ([industry, role, type, name, view], viewport) => {
+    const { context, page } = await open(browser, {
+      url: route({ type, name, tab: view }),
       viewport,
-      reducedMotion: "reduce",
+      state: demoState({ industry, role }),
+      login: "password",
+      errors,
+      consoleErrors: true,
     });
-    await context.addInitScript(
-      (workspace) =>
-        localStorage.setItem(
-          "vizenta-ai-demo-v1",
-          JSON.stringify({
-            workspace,
-            theme: "light",
-            name: "QA User",
-            audit: [],
-            readNotifications: [],
-          }),
-        ),
-      { industry, role, scope: scopeOf(industry, role) },
-    );
-    const page = await context.newPage();
-    page.setDefaultTimeout(15000);
-    page.on("pageerror", (e) => errors.push(e.message));
-    page.on("console", (m) => {
-      if (m.type() === "error") errors.push(m.text());
-    });
-    const query = new URLSearchParams({ type, name, tab }).toString();
-    await page.goto(`${base}/?${query}`, {
-      waitUntil: "domcontentloaded",
-      timeout: 60000,
-    });
-    await signIn(page);
     await page
-      .getByRole("tab", { name: tab, exact: true, selected: true })
+      .getByRole("tab", { name: view, exact: true, selected: true })
       .waitFor();
-    await page
-      .getByTestId("records-table")
-      .filter({ visible: true })
-      .first()
-      .waitFor();
+    await records(page).first().waitFor();
     return { context, page };
-  };
-  // Every fresh load opens the login screen. Sign-in accepts any demo
-  // credentials; a verification step, when shown, takes the demo code 123456.
-  const signIn = async (page) => {
-    const button = (name) =>
-      page.getByRole("button", { name, exact: true }).filter({ visible: true });
-    await page.getByTestId("launch-screen").waitFor({ state: "detached" });
-    await page.getByLabel("User Id", { exact: true }).fill("qa@vizenta.ai");
-    await page.getByLabel("Password", { exact: true }).fill("Preview123!");
-    await button("Sign in").click();
-    const code = page.getByLabel("Mobile verification digit 1", {
-      exact: true,
-    });
-    if (
-      await code.waitFor({ timeout: 1500 }).then(
-        () => true,
-        () => false,
-      )
-    ) {
-      await code.fill("123456");
-      await button("Verify code").click();
-    }
-    await button("Profile and settings").waitFor();
   };
   const columnsOn = async (page, labels) => {
     if (!labels?.length) return;
-    await page
-      .getByTestId("records-table")
-      .filter({ visible: true })
-      .getByRole("button", { name: "Columns", exact: true })
-      .click();
+    await button(records(page), "Columns").click();
     for (const label of labels) {
       const box = page.getByRole("checkbox", { name: label, exact: true });
       if (!(await box.isChecked())) await box.click();
     }
-    await page.getByRole("button", { name: "Done", exact: true }).click();
+    await button(page, "Done").click();
   };
   // Measure once the table's portraits are present and loaded (a failed one
   // falls back to initials and drops out); a timeout is reported by the checks.
@@ -247,112 +190,89 @@ function measureAvatars(headers) {
       assert.deepEqual(shared, [], "people sharing one portrait");
     });
   };
-  try {
-    for (const spec of cases) {
-      const [industry, role, , name, tab, headers, extra] = spec;
-      const label = `${industry} ${role} ${name} / ${tab}`;
-      // Desktop table: each person column shows avatars with a profile image label.
-      let { context, page } = await open(spec, desktop);
-      try {
-        await columnsOn(page, extra);
-        const result = await settle(page, headers);
-        assert.ok(result.found, "records table found");
-        for (const header of headers)
-          check(`${label} · ${header} column shows portraits`, () => {
-            assert.notEqual(
-              result.columns[header],
-              null,
-              `"${header}" header visible in [${result.head}]`,
-            );
-            assert.ok(
-              result.columns[header] >= 1,
-              `${result.columns[header]} of ${result.rows} rows have a portrait`,
-            );
-          });
-        portraitsOk(label, result);
-        await page.screenshot({
-          path: path.join(output, slug(label) + "-desktop.png"),
-        });
-        console.log(
-          `     ${result.rows} rows · ${result.avatars.length} portraits · ` +
-            headers.map((h) => `${h}: ${result.columns[h]}`).join(", "),
-        );
-        // Record detail: the header uses the 72 dp portrait.
-        if (name === "People & Access") {
-          await page
-            .getByTestId("records-table")
-            .filter({ visible: true })
-            .getByRole("button", { name: /^Open / })
-            .first()
-            .click();
-          await page
-            .getByRole("button", { name: "Back to records", exact: true })
-            .waitFor();
-          const header = await page.evaluate(
-            () =>
-              [...document.images]
-                .filter((img) => / profile image$/.test(img.alt))
-                .map((img) =>
-                  Math.round(img.parentElement.getBoundingClientRect().width),
-                )
-                .sort((a, b) => b - a)[0],
+  for (const spec of cases) {
+    const [industry, role, , name, view, headers, extra] = spec;
+    const label = `${industry} ${role} ${name} / ${view}`;
+    // Desktop table: each person column shows avatars with a profile image label.
+    let { context, page } = await openCase(spec, desktop);
+    try {
+      await columnsOn(page, extra);
+      const result = await settle(page, headers);
+      assert.ok(result.found, "records table found");
+      for (const header of headers)
+        check(`${label} · ${header} column shows portraits`, () => {
+          assert.notEqual(
+            result.columns[header],
+            null,
+            `"${header}" header visible in [${result.head}]`,
           );
-          check(`${label} · detail header portrait`, () =>
-            assert.ok(header >= 70, `largest portrait is ${header}px`),
-          );
-          await page.screenshot({
-            path: path.join(output, slug(label) + "-detail.png"),
-          });
-        }
-      } catch (e) {
-        failures.push(`${label} desktop: ${e.message}`);
-        console.log(`FAIL ${label} desktop: ${e.message}`);
-      } finally {
-        await context.close();
-      }
-      // Mobile record cards (< 768 px) use the same format.
-      ({ context, page } = await open(spec, mobile));
-      try {
-        await columnsOn(page, extra);
-        const result = await settle(page, headers);
-        check(`${label} · mobile cards show portraits`, () => {
-          assert.ok(result.cards > 0, "record cards shown");
           assert.ok(
-            result.cardsWithAvatar >= 1,
-            `${result.cardsWithAvatar} of ${result.cards} cards have a portrait`,
+            result.columns[header] >= 1,
+            `${result.columns[header]} of ${result.rows} rows have a portrait`,
           );
         });
-        check(`${label} · mobile has no horizontal scroll`, () =>
-          assert.ok(
-            result.overflow <= 1,
-            `page scrolls by ${result.overflow}px`,
-          ),
-        );
-        portraitsOk(`${label} mobile`, result);
-        await page.screenshot({
-          path: path.join(output, slug(label) + "-mobile.png"),
-        });
-      } catch (e) {
-        failures.push(`${label} mobile: ${e.message}`);
-        console.log(`FAIL ${label} mobile: ${e.message}`);
-      } finally {
-        await context.close();
-      }
-    }
-    if (errors.length) failures.push(...errors.map((e) => "page error: " + e));
-    if (failures.length) {
-      console.error(
-        `\n${failures.length} person portrait checks failed:\n  ${failures.join("\n  ")}`,
-      );
-      process.exitCode = 1;
-    } else
+      portraitsOk(label, result);
+      await shot(page, slug(label) + "-desktop");
       console.log(
-        "\nAll person portrait checks passed. Screenshots in qa/person-portraits/.",
+        `     ${result.rows} rows · ${result.avatars.length} portraits · ` +
+          headers.map((h) => `${h}: ${result.columns[h]}`).join(", "),
       );
-  } finally {
-    await browser.close();
+      // Record detail: the header uses the 72 dp portrait.
+      if (name === "People & Access") {
+        await rows(page).first().click();
+        await button(page, "Back to records").waitFor();
+        const header = await page.evaluate(
+          () =>
+            [...document.images]
+              .filter((img) => / profile image$/.test(img.alt))
+              .map((img) =>
+                Math.round(img.parentElement.getBoundingClientRect().width),
+              )
+              .sort((a, b) => b - a)[0],
+        );
+        check(`${label} · detail header portrait`, () =>
+          assert.ok(header >= 70, `largest portrait is ${header}px`),
+        );
+        await shot(page, slug(label) + "-detail");
+      }
+    } catch (e) {
+      failures.push(`${label} desktop: ${e.message}`);
+      console.log(`FAIL ${label} desktop: ${e.message}`);
+    } finally {
+      await context.close();
+    }
+    // Mobile record cards (< 768 px) use the same format.
+    ({ context, page } = await openCase(spec, PHONE));
+    try {
+      await columnsOn(page, extra);
+      const result = await settle(page, headers);
+      check(`${label} · mobile cards show portraits`, () => {
+        assert.ok(result.cards > 0, "record cards shown");
+        assert.ok(
+          result.cardsWithAvatar >= 1,
+          `${result.cardsWithAvatar} of ${result.cards} cards have a portrait`,
+        );
+      });
+      check(`${label} · mobile has no horizontal scroll`, () =>
+        assert.ok(result.overflow <= 1, `page scrolls by ${result.overflow}px`),
+      );
+      portraitsOk(`${label} mobile`, result);
+      await shot(page, slug(label) + "-mobile");
+    } catch (e) {
+      failures.push(`${label} mobile: ${e.message}`);
+      console.log(`FAIL ${label} mobile: ${e.message}`);
+    } finally {
+      await context.close();
+    }
   }
-})().catch((e) => {
-  console.error(e);
-  process.exitCode = 1;
+  if (errors.length) failures.push(...errors.map((e) => "page error: " + e));
+  if (failures.length) {
+    console.error(
+      `\n${failures.length} person portrait checks failed:\n  ${failures.join("\n  ")}`,
+    );
+    process.exitCode = 1;
+  } else
+    console.log(
+      "\nAll person portrait checks passed. Screenshots in qa/person-portraits/.",
+    );
 });

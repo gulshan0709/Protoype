@@ -1,28 +1,43 @@
-const { chromium } = require("playwright");
+// Checks the core workspace flows: overview colours, record detail with a
+// review note that survives reload, search empty state, CSV export, the
+// assistant, dark theme, industry switch, phone navigation, nested dialog
+// Escape, responsive widths, a required resolution reason with local lifecycle
+// persistence, the unauthorized preview, and sign-out. Screenshots and
+// ui-results.json are saved to qa/.
+//
+//   npm run test:ui
+const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const assert = require("node:assert/strict");
-const output = path.resolve(__dirname, "../qa");
-fs.mkdirSync(output, { recursive: true });
-(async () => {
-  const browser = await chromium.launch({ channel: "chrome", headless: true });
-  const context = await browser.newContext({
-    viewport: { width: 1512, height: 982 },
-    acceptDownloads: true,
+const {
+  PHONE,
+  baseUrl,
+  button,
+  demoState,
+  enter,
+  main,
+  noOverflow,
+  open,
+  qaDir,
+  records,
+  route,
+  rows,
+  seed,
+  shooter,
+  writeResults,
+} = require("./lib/qa.cjs");
+const base = baseUrl("http://127.0.0.1:8082");
+
+main(async (browser) => {
+  const output = qaDir();
+  const shot = shooter(output);
+  const { page, errors } = await open(browser, {
+    base,
+    reducedMotion: "no-preference",
+    timeout: 30000,
   });
-  const page = await context.newPage();
-  const enterWorkspace = async () => {
-    await page.getByTestId("launch-screen").waitFor({ state: "detached" });
-    await page
-      .getByRole("button", { name: "Explore workspace", exact: true })
-      .click();
-  };
-  const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(process.env.VIZENTA_QA_URL || "http://127.0.0.1:8082");
-  await enterWorkspace();
+  const b = (name) => button(page, name);
   await page.getByText("Customer Readiness", { exact: true }).first().waitFor();
-  await page.getByTestId("launch-screen").waitFor({ state: "detached" });
   assert.equal(
     await page
       .getByTestId("reference-sidebar")
@@ -31,151 +46,77 @@ fs.mkdirSync(output, { recursive: true });
     "Reference navy sidebar",
   );
   assert.equal(
-    await page
-      .getByRole("button", { name: "Export", exact: true })
-      .evaluate((el) => getComputedStyle(el).backgroundColor),
+    await b("Export").evaluate((el) => getComputedStyle(el).backgroundColor),
     "rgb(8, 127, 112)",
     "Deeper theme teal export action supports white labels",
   );
-  await page.screenshot({
-    path: path.join(output, "desktop-overview.png"),
-    fullPage: true,
-  });
+  await shot(page, "desktop-overview", { fullPage: true });
   console.log("Desktop overview rendered");
-  await page
-    .getByRole("button", { name: "Open North Campus", exact: true })
-    .click();
+  await b("Open North Campus").click();
   await page.getByText("Record overview", { exact: true }).waitFor();
-  await page.getByRole("button", { name: "Open record", exact: true }).click();
+  await b("Open record").click();
   await page
     .getByRole("textbox", { name: "Decision or review note" })
     .fill("Contact the campus owner to verify the notification fallback.");
-  await page.getByRole("button", { name: "Save review", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Back to workspace", exact: true })
-    .click();
+  await b("Save review").click();
+  await b("Back to workspace").click();
   await page.getByText(/Contact the campus owner/).waitFor();
   await page.reload();
-  await enterWorkspace();
+  await enter(page);
   await page.getByText(/Contact the campus owner/).waitFor();
-  await page.screenshot({
-    path: path.join(output, "record-detail.png"),
-    fullPage: true,
-  });
-  await page
-    .getByRole("button", { name: "Back to records", exact: true })
-    .click();
+  await shot(page, "record-detail", { fullPage: true });
+  await b("Back to records").click();
   await page
     .getByRole("textbox", { name: "Search records…" })
     .fill("no such campus");
   await page.getByText("No matching records", { exact: true }).waitFor();
-  await page
-    .getByRole("button", { name: "Clear filters", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await b("Clear filters").click();
+  await b("Export").click();
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export CSV", exact: true }).click();
-  const file = await download;
-  await file.saveAs(path.join(output, "export.csv"));
+  await b("Export CSV").click();
+  await (await download).saveAs(path.join(output, "export.csv"));
   assert.ok(
     fs
       .readFileSync(path.join(output, "export.csv"), "utf8")
       .includes("North Campus"),
   );
-  await page
-    .getByRole("button", { name: "Ask Vizenta", exact: true })
-    .first()
-    .click();
-  await page
-    .getByRole("button", { name: "What needs attention?", exact: true })
-    .click();
+  await b("Ask Vizenta").first().click();
+  await b("What needs attention?").click();
   await page.getByText(/records need your attention/).waitFor();
   await page.keyboard.press("Escape");
-  await page
-    .getByRole("button", { name: "Profile and settings", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Appearance: Light", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Dark", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Save preferences", exact: true })
-    .click();
-  await page.screenshot({
-    path: path.join(output, "desktop-dark.png"),
-    fullPage: true,
-  });
-  await page
-    .getByRole("button", { name: "Switch workspace", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Manufacturing industry", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Open workspace", exact: true })
-    .click();
-  await page
-    .getByRole("button", {
-      name: "Explore Blocking issues",
-      exact: true,
-    })
-    .waitFor();
-  await page.screenshot({
-    path: path.join(output, "manufacturing-dark.png"),
-    fullPage: true,
-  });
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({
-    path: path.join(output, "mobile-overview.png"),
-    fullPage: true,
-  });
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth > innerWidth,
-  );
-  assert.equal(overflow, false, "No page-level horizontal overflow");
-  await page.getByRole("button", { name: "Explore", exact: true }).click();
-  await page.getByRole("button", { name: "Gate", exact: true }).click();
-  await page
-    .getByRole("button", { name: /^Open / })
+  await b("Profile and settings").click();
+  await b("Appearance: Light").click();
+  await b("Dark").click();
+  await b("Save preferences").click();
+  await shot(page, "desktop-dark", { fullPage: true });
+  await b("Switch workspace").click();
+  await b("Manufacturing industry").click();
+  await b("Open workspace").click();
+  await b("Explore Blocking issues").waitFor();
+  await shot(page, "manufacturing-dark", { fullPage: true });
+  await page.setViewportSize(PHONE);
+  await shot(page, "mobile-overview", { fullPage: true });
+  assert.ok(await noOverflow(page), "No page-level horizontal overflow");
+  await b("Explore").click();
+  await b("Gate").click();
+  // A record card of the Gate page (the header's "Open …" buttons don't count).
+  await rows(page)
     .filter({ has: page.locator("svg") })
     .first()
     .waitFor();
-  await page.screenshot({
-    path: path.join(output, "mobile-gate.png"),
-    fullPage: true,
-  });
-  await page
-    .getByRole("button", { name: "Profile and settings", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Appearance: Dark", exact: true })
-    .click();
+  await shot(page, "mobile-gate", { fullPage: true });
+  await b("Profile and settings").click();
+  await b("Appearance: Dark").click();
   await page.keyboard.press("Escape");
-  await page
-    .getByRole("button", { name: "Save preferences", exact: true })
-    .waitFor();
-  await page
-    .getByRole("button", { name: "Appearance: Dark", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Light", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Save preferences", exact: true })
-    .click();
+  await b("Save preferences").waitFor();
+  await b("Appearance: Dark").click();
+  await b("Light").click();
+  await b("Save preferences").click();
   for (const width of [320, 375, 390, 768, 1024, 1512]) {
     await page.setViewportSize({ width, height: 900 });
-    assert.equal(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth > innerWidth,
-      ),
-      false,
-      "No overflow at " + width,
-    );
+    assert.ok(await noOverflow(page), "No overflow at " + width);
     if (width === 390 || width === 768)
-      await page.screenshot({
-        path: path.join(
-          output,
-          width === 390 ? "mobile-light.png" : "tablet-light.png",
-        ),
+      await shot(page, width === 390 ? "mobile-light" : "tablet-light", {
         fullPage: true,
       });
   }
@@ -184,46 +125,22 @@ fs.mkdirSync(output, { recursive: true });
     role: "corporate_security_admin",
     scope: "Across sites",
   };
-  await page.evaluate(
-    (workspace) =>
-      localStorage.setItem(
-        "vizenta-ai-demo-v1",
-        JSON.stringify({
-          workspace,
-          theme: "light",
-          session: true,
-          name: "QA User",
-          audit: [],
-          readNotifications: [],
-        }),
-      ),
-    workspace,
-  );
+  await seed(page, demoState(workspace));
   const contract = require("../src/domain/contracts/data/corporate.json").pages[
     workspace.role
   ].product.Shield.Command;
   await page.goto(
-    (process.env.VIZENTA_QA_URL || "http://127.0.0.1:8082") +
-      "/?" +
-      new URLSearchParams({
-        type: "product",
-        name: "Shield",
-        tab: "Command",
-      }),
+    base + route({ type: "product", name: "Shield", tab: "Command" }),
   );
-  await enterWorkspace();
-  await page
+  await enter(page);
+  await records(page)
     .getByTestId("records-row")
     .filter({ hasText: "Action required" })
     .first()
     .getByRole("button", { name: /^Open / })
     .click();
-  await page
-    .getByRole("button", { name: "Resolve issue", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Confirm resolve issue", exact: true })
-    .click();
+  await b("Resolve issue").click();
+  await b("Confirm resolve issue").click();
   await page
     .getByText("Add at least 5 characters explaining your decision.", {
       exact: true,
@@ -232,33 +149,17 @@ fs.mkdirSync(output, { recursive: true });
   await page
     .getByRole("textbox", { name: "Reason (required)", exact: true })
     .fill("Resolved in the local QA workflow with an accountable review.");
-  await page
-    .getByRole("button", { name: "Confirm resolve issue", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Back to workspace", exact: true })
-    .click();
+  await b("Confirm resolve issue").click();
+  await b("Back to workspace").click();
   await page.getByText(/Workflow: Resolved/).waitFor();
-  assert.equal(
-    await page
-      .getByRole("button", { name: "Resolve issue", exact: true })
-      .count(),
-    0,
-  );
+  assert.equal(await b("Resolve issue").count(), 0);
   await page.reload();
-  await enterWorkspace();
+  await enter(page);
   await page.getByText(/Workflow: Resolved/).waitFor();
-  await page.screenshot({
-    path: path.join(output, "lifecycle-resolved.png"),
-    fullPage: true,
-  });
-  await page
-    .getByRole("button", { name: "Profile and settings", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Preview data state: Populated", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Unauthorized", exact: true }).click();
+  await shot(page, "lifecycle-resolved", { fullPage: true });
+  await b("Profile and settings").click();
+  await b("Preview data state: Populated").click();
+  await b("Unauthorized").click();
   await page
     .getByText("Access restricted", { exact: true })
     .filter({ visible: true })
@@ -271,57 +172,37 @@ fs.mkdirSync(output, { recursive: true });
     contract.metrics.length,
     "Unauthorized preview must suppress every metric value",
   );
-  await page
-    .getByRole("button", { name: "Show records", exact: true })
-    .first()
-    .click();
-  await page
-    .getByRole("button", { name: "Profile and settings", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await b("Show records").first().click();
+  await b("Profile and settings").click();
+  await b("Sign out").click();
   await page
     .getByText("Welcome back", { exact: true })
     .filter({ visible: true })
     .waitFor();
-  await page
-    .getByRole("button", { name: "Explore workspace", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Profile and settings", exact: true })
-    .waitFor();
+  await b("Explore workspace").click();
+  await b("Profile and settings").waitFor();
   assert.deepEqual(errors, []);
-  fs.writeFileSync(
-    path.join(output, "ui-results.json"),
-    JSON.stringify(
-      {
-        status: "passed",
-        checks: [
-          "desktop overview",
-          "record detail",
-          "review validation and persistence",
-          "search empty state",
-          "CSV download",
-          "scoped assistant",
-          "dark theme",
-          "industry switch",
-          "mobile navigation",
-          "nested dialog Escape",
-          "320/375/390/768/1024/1512 widths",
-          "required resolution reason",
-          "local lifecycle persistence",
-          "completed workflow action removal",
-          "unauthorized data-state preview suppresses metrics",
-          "sign-out and demo re-entry",
-        ],
-        runtimeErrors: errors,
-      },
-      null,
-      2,
-    ),
+  writeResults(
+    "ui-results.json",
+    [
+      "desktop overview",
+      "record detail",
+      "review validation and persistence",
+      "search empty state",
+      "CSV download",
+      "scoped assistant",
+      "dark theme",
+      "industry switch",
+      "mobile navigation",
+      "nested dialog Escape",
+      "320/375/390/768/1024/1512 widths",
+      "required resolution reason",
+      "local lifecycle persistence",
+      "completed workflow action removal",
+      "unauthorized data-state preview suppresses metrics",
+      "sign-out and demo re-entry",
+    ],
+    errors,
   );
   console.log("UI checks passed");
-  await browser.close();
-})().catch((error) => {
-  console.error(error);
-  process.exit(1);
 });
