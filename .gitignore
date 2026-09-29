@@ -9,3 +9,5 @@ qa/
 .env*
 /android/
 /ios/
+.claude/settings.local.json
+CLAUDE.local.md

@@ -42,7 +42,8 @@
     "test:residence-setup": "node scripts/verify-residence-setup.cjs",
     "test:sources-setup": "node scripts/verify-sources-setup.cjs",
     "test:surveillance-setup": "node scripts/verify-surveillance-setup.cjs",
-    "portraits:assign": "node scripts/assign-demo-portraits.cjs"
+    "portraits:assign": "node scripts/assign-demo-portraits.cjs",
+    "data:fingerprint": "node scripts/data-fingerprint.cjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",

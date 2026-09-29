@@ -58,6 +58,8 @@ The frontend retains aggregate context panels as authored. They are not treated 
 
 Helpers shared across modules live in `src/domain/common/`: `hash.ts` (the deterministic FNV-1a hashing every demo generator uses), `text.ts`, `time.ts` (the Sep 15 2026 09:45 demo snapshot and calendar helpers), `validation.ts`, `csv.ts` (reading and formula-guarded writing) and `upload.ts` (the bulk-upload reader behind the learner, surveillance-user and class uploads). `contracts/sessionRecords.ts` builds the records the setup forms create or edit, and `contracts/pageBuilders.ts` holds what the product extensions share. These modules are plain TypeScript without React Native imports, so the node tests load them through `scripts/lib/ts-hooks.cjs`.
 
+A refactor of these modules must leave the data unchanged. `npm run data:fingerprint` hashes every industry after import, and again after every tab has been opened for every role and scope. Both hashes must be the same before and after the change.
+
 ## Local state and workflow semantics
 
 AsyncStorage stores a versioned demo session, workspace, theme, display name, local audit and read notification IDs. Hydration finishes before rendering workspace data. Writes are kept local; storage failures report that a change is session-only.

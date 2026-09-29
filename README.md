@@ -253,6 +253,12 @@ Browser checks use installed Google Chrome through Playwright. Outputs and scree
 
 `npm test` runs every `tests/*.test.cjs` with `scripts/lib/ts-hooks.cjs` preloaded, so tests load `src/**/*.ts` the way Metro does. `tests/helpers.cjs` has the shared loaders (`contract(id)`, `educationWithExtensions()`) and the page walker `eachPage(industry, { variants })`.
 
+`npm run data:fingerprint` prints two hashes of the built demo data: one after import, and one after every tab has been opened for every role and scope. Run it before and after a refactor under `src/domain/`. Unchanged hashes show the refactor left every page's data as it was.
+
+### Working with Claude Code
+
+[CLAUDE.md](CLAUDE.md) and [.claude/rules/](.claude/rules/) give Claude Code sessions the project's rules, shared building blocks, performance patterns, QA workflow and known pitfalls. Claude Code loads them automatically. Update them in the same commit as a change to a convention. Personal notes belong in `CLAUDE.local.md` and `.claude/settings.local.json`, which are gitignored.
+
 ### Table alignment
 
 Records tables build the header and every row from one set of column rules. Status and trailing action columns get one width for the whole table (the widest pill, up to 220 px, and the widest row action). Rows without an action leave that column empty, so their cells stay under the headers. All header labels are uppercase with the same style. With the app running, `npm run test:tables` opens representative tables at 1512, 1280, 1024 and 800 px and in the 390 px card layout. These include Gate → User Attendance (with pages that mix present and absent rows), Gate → In/Out, Class & Lab, Warden leave, People & Access, and a table from each other industry. For every visible row it checks that each cell's left edge is within 2 px of its header's, that cells don't overflow, that status pills aren't truncated and that headers match. It saves screenshots and `results.json` to `qa/tables/` and exits non-zero on a mismatch. Add `-- --all` to also crawl every tab for each industry's Customer Admin, and `--shots` to capture each of those tables.
