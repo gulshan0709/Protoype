@@ -22,11 +22,13 @@ import {
   Badge,
   Button,
   Card,
+  Divider,
   Field,
   Row,
   Txt,
 } from "../../../shared/ui/Primitives";
 import { Icon } from "../../../shared/ui/Icon";
+import { Chip } from "../../../shared/ui/Chip";
 import { FrameGrid } from "./MediaFrameGrid";
 
 const LEVEL_ICON: Record<MediaLevelKey, string> = {
@@ -145,7 +147,7 @@ export function MediaExplorer({
                     onPress={() =>
                       goUpTo(crumb.key === "root" ? "org" : crumb.key)
                     }
-                    style={({ hovered }: any) => ({
+                    style={({ hovered }) => ({
                       paddingHorizontal: 8,
                       paddingVertical: 3,
                       borderRadius: 6,
@@ -169,7 +171,7 @@ export function MediaExplorer({
             <Button compact label="Refresh" icon="refresh" onPress={refresh} />
           </Row>
         </Row>
-        <View style={{ height: 1, backgroundColor: c.border }} />
+        <Divider />
         {/* The four fields, always spelled out: on a wall of near-identical
             frames, "which camera is this?" is the question that matters. */}
         <View
@@ -394,7 +396,7 @@ function FolderLevel({
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${level.label.toLowerCase()} ${row.range || row.label}`}
                 onPress={() => onPick(row.raw)}
-                style={({ pressed, hovered }: any) => ({
+                style={({ pressed, hovered }) => ({
                   width: cardWidth,
                   flexDirection: "row",
                   alignItems: "center",
@@ -481,11 +483,12 @@ function SlotRail({
         const info = describeSlot(value);
         const active = value === current;
         return (
-          <Pressable
+          <Chip
             key={value}
-            accessibilityRole="button"
+            label={info.label}
             accessibilityLabel={`Time slot ${info.range}`}
-            accessibilityState={{ selected: active }}
+            selected={active}
+            disabled={active}
             onLayout={(e) => {
               // Bring the open slot into view once, so the rail starts where you are.
               if (!active || scrolled.current) return;
@@ -495,25 +498,8 @@ function SlotRail({
                 animated: false,
               });
             }}
-            disabled={active}
             onPress={() => onPick(value)}
-            style={({ hovered }: any) => ({
-              paddingHorizontal: 11,
-              paddingVertical: 6,
-              borderRadius: 99,
-              borderWidth: 1,
-              borderColor: active
-                ? c.actionPrimary
-                : hovered
-                  ? c.link
-                  : c.border,
-              backgroundColor: active ? c.actionPrimary : c.surface,
-            })}
-          >
-            <Txt size={12} bold={active} color={active ? c.actionInk : c.text}>
-              {info.label}
-            </Txt>
-          </Pressable>
+          />
         );
       })}
     </ScrollView>

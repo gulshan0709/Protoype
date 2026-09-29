@@ -1,3 +1,5 @@
+// Loads src/**/*.ts the way Metro does (extensionless imports, JSON imports).
+require("../scripts/lib/ts-hooks.cjs");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { gateAttendance } = require("../src/domain/contracts/gateExtension.ts");

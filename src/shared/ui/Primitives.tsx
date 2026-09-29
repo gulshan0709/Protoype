@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Text,
   View,
@@ -12,6 +12,32 @@ import {
 } from "react-native";
 import { font, useTheme, toneColors } from "../theme/Theme";
 import { Icon } from "./Icon";
+// Web: a truncated Txt shows its full text as a hover title while it is
+// clipped. One observer serves every truncated text on the page.
+const fullTexts = new WeakMap<Element, string>();
+let clipObserver: ResizeObserver | undefined;
+function syncTitle(element: Element) {
+  const full = fullTexts.get(element);
+  if (full === undefined) return;
+  const clipped =
+    element.scrollWidth > element.clientWidth + 1 ||
+    element.scrollHeight > element.clientHeight + 1;
+  if (clipped) element.setAttribute("title", full);
+  else element.removeAttribute("title");
+}
+function titleWhenClipped(element: HTMLElement, full: string) {
+  fullTexts.set(element, full);
+  clipObserver ??= new ResizeObserver((entries) =>
+    entries.forEach((entry) => syncTitle(entry.target)),
+  );
+  syncTitle(element);
+  clipObserver.observe(element);
+  return () => {
+    clipObserver?.unobserve(element);
+    fullTexts.delete(element);
+    element.removeAttribute("title");
+  };
+}
 export function Txt({
   children,
   size = 14,
@@ -37,20 +63,7 @@ export function Txt({
     if (Platform.OS !== "web" || !lines || fullText === undefined) return;
     const element = textRef.current as unknown as HTMLElement | null;
     if (!element) return;
-    const measure = () => {
-      const clipped =
-        element.scrollWidth > element.clientWidth + 1 ||
-        element.scrollHeight > element.clientHeight + 1;
-      if (clipped) element.setAttribute("title", fullText);
-      else element.removeAttribute("title");
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => {
-      observer.disconnect();
-      element.removeAttribute("title");
-    };
+    return titleWhenClipped(element, fullText);
   }, [fullText, lines]);
   return (
     <Text
@@ -84,13 +97,16 @@ export function Row({
 export function Card({
   children,
   style,
+  testID,
 }: {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }) {
   const c = useTheme();
   return (
     <View
+      testID={testID}
       style={[
         s.card,
         {
@@ -112,6 +128,8 @@ export function Button({
   variant = "secondary",
   disabled,
   compact = false,
+  iconOnly = false,
+  tooltip,
   testID,
 }: {
   label: string;
@@ -120,10 +138,16 @@ export function Button({
   variant?: "primary" | "secondary" | "ghost";
   disabled?: boolean;
   compact?: boolean;
+  /** Square icon button; `label` stays the accessible name. */
+  iconOnly?: boolean;
+  /** Hover/focus hint for icon-only buttons (defaults to `label`). */
+  tooltip?: string;
   testID?: string;
 }) {
   const c = useTheme();
   const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const size = compact ? 34 : 40;
   const filled = variant !== "ghost" || icon === "download";
   const action =
     icon === "download"
@@ -144,11 +168,14 @@ export function Button({
       onPress={onPress}
       onHoverIn={() => setHovered(true)}
       onHoverOut={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       style={({ pressed }) => [
         s.button,
         {
-          minHeight: compact ? 34 : 40,
-          paddingHorizontal: 12,
+          minHeight: size,
+          paddingHorizontal: iconOnly ? 0 : 12,
+          width: iconOnly ? size : undefined,
           backgroundColor: filled
             ? disabled
               ? c.actionDisabled
@@ -169,45 +196,113 @@ export function Button({
       ]}
     >
       {!!icon && <Icon name={icon} size={17} color={color} />}
-      <Txt size={12} bold color={color}>
-        {label}
-      </Txt>
+      {!iconOnly && (
+        <Txt size={12} bold color={color}>
+          {label}
+        </Txt>
+      )}
+      {iconOnly && Platform.OS === "web" && (hovered || focused) && (
+        // Sits above the button: later siblings in RN Web paint over
+        // anything that drops below into the next section.
+        <View
+          pointerEvents="none"
+          style={[s.tooltip, { backgroundColor: c.text }]}
+        >
+          {/* nowrap: an absolute box right-aligned to a 34px button would
+              otherwise wrap the hint word by word. */}
+          <Txt
+            size={11}
+            bold
+            color={c.surface}
+            style={{ whiteSpace: "nowrap" } as TextStyle}
+          >
+            {tooltip ?? label}
+          </Txt>
+        </View>
+      )}
     </Pressable>
   );
 }
+/**
+ * Icon-only button; `label` is its accessible name. outline: bordered surface
+ * (headers, dialogs, tables). filled: navy action. overlay: dark glass over
+ * media. ghost: bare, on the navy navigation rail.
+ */
 export function IconButton({
   name,
   label,
   onPress,
-  active = false,
+  size = 35,
+  iconSize = 20,
+  shape = "square",
+  variant = "outline",
+  color,
+  disabled,
+  expanded,
 }: {
   name: string;
   label: string;
   onPress: () => void;
-  active?: boolean;
+  /** Side (or diameter) in dp. */
+  size?: number;
+  iconSize?: number;
+  shape?: "square" | "round";
+  variant?: "outline" | "filled" | "overlay" | "ghost";
+  /** Icon colour; each variant has its own default. */
+  color?: string;
+  disabled?: boolean;
+  /** Disclosure toggles: whether the part they control is open. */
+  expanded?: boolean;
 }) {
   const c = useTheme();
+  const ink =
+    color ??
+    {
+      outline: c.link,
+      filled: disabled ? c.muted : c.actionInk,
+      overlay: "#FFFFFF",
+      ghost: c.sidebarIcon,
+    }[variant];
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled, expanded }}
+      aria-expanded={expanded}
+      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={({ pressed, hovered }) => [
         s.iconButton,
         {
-          backgroundColor: active
-            ? pressed
-              ? c.actionPrimaryPressed
-              : c.actionPrimary
-            : pressed
-              ? c.background
-              : c.surface,
-          borderWidth: 1,
-          borderColor: c.border,
+          width: size,
+          height: size,
+          borderRadius: shape === "round" ? size / 2 : size < 35 ? 8 : 9,
         },
+        variant === "outline"
+          ? {
+              borderWidth: 1,
+              borderColor: c.border,
+              backgroundColor: pressed ? c.background : c.surface,
+            }
+          : variant === "filled"
+            ? {
+                backgroundColor: disabled ? c.primarySoft : c.actionSecondary,
+                opacity: disabled ? 0.5 : 1,
+              }
+            : variant === "overlay"
+              ? {
+                  backgroundColor: pressed
+                    ? "rgba(0,0,0,0.7)"
+                    : "rgba(0,0,0,0.45)",
+                  opacity: disabled ? 0.35 : 1,
+                }
+              : {
+                  backgroundColor:
+                    pressed || hovered ? c.sidebarHover : "transparent",
+                },
       ]}
     >
-      <Icon name={name} color={active ? c.actionInk : c.link} />
+      <Icon name={name} size={iconSize} color={ink} />
     </Pressable>
   );
 }
@@ -357,6 +452,154 @@ export function SectionTitle({
     </Row>
   );
 }
+/** A card with a titled header row and edge-to-edge rows below it. */
+export function PanelCard({
+  title,
+  subtitle,
+  truncate,
+  trailing,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  truncate?: boolean;
+  trailing?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <Card style={{ padding: 0, overflow: "hidden" }}>
+      <View style={{ paddingVertical: 11, paddingHorizontal: 14 }}>
+        <SectionTitle
+          title={title}
+          subtitle={subtitle}
+          truncate={truncate}
+          trailing={trailing}
+        />
+      </View>
+      {children}
+    </Card>
+  );
+}
+/** A muted label over its value; text values use the standard 13 bold. */
+export function LabeledValue({
+  label,
+  children,
+  style,
+}: {
+  label: string;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const c = useTheme();
+  return (
+    <View style={[{ gap: 5 }, style]}>
+      <Txt size={11} color={c.muted}>
+        {label}
+      </Txt>
+      {typeof children === "string" || typeof children === "number" ? (
+        <Txt size={13} bold>
+          {children}
+        </Txt>
+      ) : (
+        children
+      )}
+    </View>
+  );
+}
+/** Hairline between sections. */
+export function Divider({ spacing }: { spacing?: number }) {
+  const c = useTheme();
+  return (
+    <View
+      style={{ height: 1, backgroundColor: c.border, marginVertical: spacing }}
+    />
+  );
+}
+/** The square mark of a checkbox; `color` fills it when checked. */
+export function CheckboxBox({
+  checked,
+  size = 19,
+  color,
+  border,
+  background,
+}: {
+  checked: boolean;
+  size?: number;
+  color?: string;
+  /** Unchecked border and fill (default: the theme's border and surface). */
+  border?: string;
+  background?: string;
+}) {
+  const c = useTheme();
+  const on = color ?? c.actionPrimary;
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: Math.round(size / 5),
+        borderWidth: 1,
+        borderColor: checked ? on : (border ?? c.border),
+        backgroundColor: checked ? on : (background ?? c.surface),
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {checked && <Icon name="check" size={13} color={c.actionInk} />}
+    </View>
+  );
+}
+/** One page of `rows`; the index clamps when the rows shrink. */
+export function usePaged<T>(rows: T[], size: number) {
+  const [index, setIndex] = useState(0);
+  const last = Math.max(0, Math.ceil(rows.length / size) - 1);
+  const current = Math.min(index, last);
+  const visible = useMemo(
+    () => rows.slice(current * size, current * size + size),
+    [rows, current, size],
+  );
+  return { index: current, last, visible, setIndex };
+}
+/** "11–20 of 42" with Previous and Next. */
+export function Pager({
+  index,
+  pageSize,
+  total,
+  onChange,
+  style,
+}: {
+  index: number;
+  pageSize: number;
+  total: number;
+  onChange: (index: number) => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const c = useTheme();
+  const last = Math.max(0, Math.ceil(total / pageSize) - 1);
+  return (
+    <Row style={[{ justifyContent: "space-between" }, style]}>
+      <Txt size={11} color={c.muted}>
+        {total
+          ? `${index * pageSize + 1}–${Math.min(index * pageSize + pageSize, total)} of ${total}`
+          : "0 records"}
+      </Txt>
+      <Row>
+        <Button
+          compact
+          label="Previous"
+          onPress={() => onChange(index - 1)}
+          disabled={index === 0}
+        />
+        <Button
+          compact
+          label="Next"
+          onPress={() => onChange(index + 1)}
+          disabled={index >= last}
+        />
+      </Row>
+    </Row>
+  );
+}
 const s = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
   card: { borderRadius: 12, borderWidth: 1, padding: 14 },
@@ -368,13 +611,17 @@ const s = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-  iconButton: {
-    width: 35,
-    height: 35,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
+  tooltip: {
+    position: "absolute",
+    bottom: "100%",
+    right: 0,
+    marginBottom: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    zIndex: 20,
   },
+  iconButton: { alignItems: "center", justifyContent: "center" },
   badge: {
     flexDirection: "row",
     alignItems: "center",

@@ -1,3 +1,4 @@
+const { INDUSTRY_IDS: ids, contract, eachPage } = require("./helpers.cjs");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const {
@@ -9,13 +10,7 @@ const {
   metricFacts,
 } = require("../src/domain/contracts/logic.ts");
 const { localRecord } = require("../src/domain/contracts/lifecycle.ts");
-const ids = ["education", "corporate", "retail", "manufacturing"];
-const contracts = Object.fromEntries(
-  ids.map((id) => [
-    id,
-    require("../src/domain/contracts/data/" + id + ".json"),
-  ]),
-);
+const contracts = Object.fromEntries(ids.map((id) => [id, contract(id)]));
 for (const id of ids)
   test(
     id + ": every persona destination and tab has a complete typed contract",
@@ -193,25 +188,13 @@ const {
   RECORD_STATUS_COLUMN,
 } = require("../src/domain/contracts/columns.ts");
 test("record tables default to three key fields and one status across industries", () => {
-  for (const data of Object.values(contracts)) {
-    for (const role of Object.values(data.pages)) {
-      for (const branch of Object.values(role)) {
-        for (const tabs of Object.values(branch)) {
-          for (const page of Object.values(tabs)) {
-            for (const variant of [
-              page,
-              ...Object.values(page.variants ?? {}),
-            ]) {
-              const ids = defaultColumnIds(variant);
-              assert.ok(ids.length <= 4, variant.id);
-              assert.ok(ids.includes(variant.columns[0].id), variant.id);
-              assert.ok(ids.includes(RECORD_STATUS_COLUMN), variant.id);
-            }
-          }
-        }
-      }
+  for (const data of Object.values(contracts))
+    for (const { page: variant } of eachPage(data)) {
+      const ids = defaultColumnIds(variant);
+      assert.ok(ids.length <= 4, variant.id);
+      assert.ok(ids.includes(variant.columns[0].id), variant.id);
+      assert.ok(ids.includes(RECORD_STATUS_COLUMN), variant.id);
     }
-  }
 });
 test("coverage defaults keep identity, campus and camera coverage", () => {
   const page =
@@ -241,11 +224,7 @@ test("column preferences preserve identity, permit hiding status and ignore stal
 });
 
 const pagesOf = (id) =>
-  Object.values(contracts[id].pages).flatMap((branches) =>
-    Object.values(branches).flatMap((destinations) =>
-      Object.values(destinations).flatMap((tabs) => Object.values(tabs)),
-    ),
-  );
+  [...eachPage(contracts[id], { variants: "none" })].map(({ page }) => page);
 test("KPI details show the calculation and time window each contract supplies", () => {
   let checked = 0;
   for (const page of pagesOf("manufacturing"))

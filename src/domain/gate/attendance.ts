@@ -5,15 +5,19 @@ import type {
   Tone,
 } from "../contracts/types";
 import type { SurveillanceUser } from "../surveillance/setup";
-const userName = (u: SurveillanceUser) =>
-  [u.first_name, u.last_name].filter(Boolean).join(" ");
+import { fullName } from "../common/text";
+import { minutesOf } from "../common/time";
+import { cellsFor, sessionEvent } from "../contracts/sessionRecords";
+export { TIME } from "../common/validation";
 const statusOf = (r: DataRecord) =>
   typeof r.cells.status === "string" ? r.cells.status : "";
+/** How many rows' status passes `test`, as metric text. */
+const countWhere = (rows: DataRecord[], test: (status: string) => boolean) =>
+  String(rows.filter((r) => test(statusOf(r))).length);
 
 /** Header counts for User Attendance, from the rows in scope. */
 export function attendanceMetrics(rows: DataRecord[]): Metric[] {
-  const n = (test: (s: string) => boolean) =>
-    String(rows.filter((r) => test(statusOf(r))).length);
+  const n = (test: (s: string) => boolean) => countWhere(rows, test);
   return [
     {
       label: "Present",
@@ -44,8 +48,7 @@ export function attendanceMetrics(rows: DataRecord[]): Metric[] {
 
 /** Header counts for In/Out, from the rows in scope. */
 export function inOutMetrics(rows: DataRecord[]): Metric[] {
-  const n = (test: (s: string) => boolean) =>
-    String(rows.filter((r) => test(statusOf(r))).length);
+  const n = (test: (s: string) => boolean) => countWhere(rows, test);
   return [
     {
       label: "In",
@@ -89,29 +92,27 @@ export function absentRowsFromUsers(
     })
     .map((r) => {
       const u = r.setup as SurveillanceUser;
-      const byColumn: Record<string, string> = {
-        user: `${userName(u)} · ${u.uid}`,
-        type: u.user_type,
-        date,
-        shift: u.shift || "—",
-        status: "Absent",
-        log: "—",
-        checkIn: "—",
-        checkOut: "—",
-        state: "Absent",
-      };
+      const name = fullName(u);
       return {
         id: `ATT-${r.id}`,
         type: "gate_attendance",
-        person: { name: userName(u), uid: u.uid, image: u.image },
-        cells: Object.fromEntries(
-          page.columns.map((col) => [col.id, byColumn[col.id] ?? "—"]),
-        ),
+        person: { name, uid: u.uid, image: u.image },
+        cells: cellsFor(page, {
+          user: `${name} · ${u.uid}`,
+          type: u.user_type,
+          date,
+          shift: u.shift || "—",
+          status: "Absent",
+          log: "—",
+          checkIn: "—",
+          checkOut: "—",
+          state: "Absent",
+        }),
         state: { label: "Absent", tone: "critical" as Tone },
         action: "Open attendance",
         scope: r.scope,
         detail: {
-          title: `${userName(u)} · ${u.uid}`,
+          title: `${name} · ${u.uid}`,
           eyebrow: "GATE ATTENDANCE",
           summary: `No verified gate entry on ${date}. Attendance can be marked manually with a reason.`,
           facts: [
@@ -128,8 +129,8 @@ export function absentRowsFromUsers(
     });
 }
 
-export const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
-export const minutes = (t: string) => +t.slice(0, 2) * 60 + +t.slice(3);
+/** "HH:MM" → minutes after midnight. */
+export const minutes = minutesOf;
 const hours = (from: string, to: string) => {
   const m = minutes(to) - minutes(from);
   return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
@@ -166,11 +167,10 @@ export function markedRecord(
       ),
       summary: `Marked present manually by ${actor}: ${m.reason}`,
       timeline: [
-        {
-          time: "Just now",
-          event: `Attendance marked ${m.checkIn}${m.checkOut ? `–${m.checkOut}` : ""} · ${m.reason}`,
+        sessionEvent(
+          `Attendance marked ${m.checkIn}${m.checkOut ? `–${m.checkOut}` : ""} · ${m.reason}`,
           actor,
-        },
+        ),
         ...record.detail.timeline,
       ],
     },

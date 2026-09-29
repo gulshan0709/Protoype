@@ -19,7 +19,7 @@ export function defaultColumnIds(page: Pick<PageContract, "id" | "columns">) {
     (column, index) => index === 0 || !/^(state|status)$/i.test(column.id),
   );
   const preferred =
-    page.id === "ca-class-coverage"
+    /^(ca|va)-class-coverage$/.test(page.id)
       ? ["space", "campus", "camera"]
       : candidates.slice(0, 3).map((column) => column.id);
   return [

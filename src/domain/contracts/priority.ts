@@ -374,7 +374,6 @@ const securityRoles = new Set([
   "ehs_incident_commander",
   "site_security_admin",
   "ehs_safety_manager",
-  "security_admin",
   "gate_guard_operator",
   "guard_response_operator",
 ]);

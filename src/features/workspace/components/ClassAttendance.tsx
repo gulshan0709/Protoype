@@ -1,27 +1,28 @@
-import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { useMemo, useState } from "react";
+import { ScrollView, View, useWindowDimensions } from "react-native";
 import type { DataRecord, Tone } from "../../../domain/contracts/types";
 import {
   applyMarks,
   classSession,
   sessionCsv,
   sessionDates,
+  sessionRows,
   termSummary,
   STATUS_LABEL,
   type AttendanceMarks,
   type AttendanceStatus,
-  type ClassSession,
   type SessionLearner,
 } from "../../../domain/classes/attendance";
 import { industries } from "../../../domain/contracts/registry";
 import { useTheme } from "../../../shared/theme/Theme";
-import { Badge, Button, Card, Field, Row, SectionTitle, Txt } from "../../../shared/ui/Primitives";
+import { Badge, Button, Card, Field, IconButton, Pager, Row, SectionTitle, Txt, usePaged } from "../../../shared/ui/Primitives";
+import { Chip } from "../../../shared/ui/Chip";
 import { Select } from "../../../shared/ui/Select";
 import { Dialog } from "../../../shared/ui/Dialog";
-import { Icon } from "../../../shared/ui/Icon";
 import { saveCsv } from "../../../shared/files/classCsv";
 import { MediaPlayer, RecordMedia } from "./RecordMedia";
 import { PersonChip } from "./PersonChip";
+import { mediaRecord } from "./mediaParts";
 
 const TONE: Record<AttendanceStatus, Tone> = {
   present: "healthy",
@@ -49,26 +50,18 @@ const TABLE_WIDTH = Object.values(COLUMNS).reduce((a, b) => a + b, 0) + 12 * (Ob
 /** Staff marks survive navigation for the session, like other demo edits. */
 const marksStore = new Map<string, AttendanceMarks>();
 
-/** Session rows of every persona, so views without their own count can borrow one. */
-function sessionRows(): DataRecord[] {
-  return Object.values(industries.education.pages).flatMap((areas) =>
-    ["Classes", "Labs"].flatMap(
-      (tab) => areas.product["Class & Lab Attendance"]?.[tab]?.records ?? [],
-    ),
-  );
-}
 /** Session attendance for a class or lab row, if the page lists sessions. */
-export function classSessionFor(pageId: string, record: DataRecord, date?: string) {
-  return classSession(pageId, record, sessionRows(), date);
+function classSessionFor(pageId: string, record: DataRecord, date?: string) {
+  return classSession(pageId, record, sessionRows(industries.education), date);
 }
 
-/** A record for the shared media components (per-person HD still, box by status). */
-function mediaRecord(record: DataRecord, learner: SessionLearner, title: string, video = false): DataRecord {
+/** A learner's capture for the shared media components (per-person HD still, box by status). */
+function learnerMedia(record: DataRecord, learner: SessionLearner, title: string, video = false): DataRecord {
   const name = `${learner.name} · ${learner.uid}`;
   // Clips carry burned-in labels (0 identified/visitor, 1 threat/identified,
   // 2 unidentified/visitor): verified learners get the identified clip.
   const clip = learner.status === "review" ? 2 : 0;
-  return {
+  return mediaRecord({
     id: `${record.id}:${learner.uid}${video ? ":video" : ""}`,
     type: "class_attendance",
     scope: record.scope,
@@ -78,46 +71,16 @@ function mediaRecord(record: DataRecord, learner: SessionLearner, title: string,
     ...(video ? { videoAsset: clip } : {}),
     demoDetection: learner.status === "review" ? "unidentified" : "identified",
     state: { label: STATUS_LABEL[learner.status], tone: TONE[learner.status] },
-    action: "",
-    detail: {
-      title: video ? `${name} · ${learner.checkIn}–${learner.lastCapture}` : name,
-      eyebrow: "CLASS ATTENDANCE",
-      summary: `${title} · captured ${learner.checkIn}–${learner.lastCapture}`,
-      facts: [],
-      sections: [],
-      timeline: [],
-      permittedActions: [],
-    },
-  };
+    title: video ? `${name} · ${learner.checkIn}–${learner.lastCapture}` : name,
+    eyebrow: "CLASS ATTENDANCE",
+    summary: `${title} · captured ${learner.checkIn}–${learner.lastCapture}`,
+  });
 }
 const captured = (l: SessionLearner) => l.checkIn !== "—";
 
 // Learners use the standard person format (portrait, name, UID) of every list.
 function Person({ learner }: { learner: SessionLearner }) {
   return <PersonChip name={learner.name} uid={learner.uid} />;
-}
-
-function IconAction({ icon, label, onPress, disabled }: { icon: string; label: string; onPress: () => void; disabled?: boolean }) {
-  const c = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      disabled={disabled}
-      onPress={onPress}
-      style={{
-        width: 34,
-        height: 34,
-        borderRadius: 17,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: disabled ? c.primarySoft : c.actionSecondary,
-        opacity: disabled ? 0.5 : 1,
-      }}
-    >
-      <Icon name={icon} size={15} color={disabled ? c.muted : c.actionInk} />
-    </Pressable>
-  );
 }
 
 /**
@@ -132,7 +95,6 @@ export function ClassAttendance({ pageId, record }: { pageId: string; record: Da
   const [date, setDate] = useState<string>();
   const [filter, setFilter] = useState<AttendanceStatus | "all">("all");
   const [query, setQuery] = useState("");
-  const [pageNo, setPageNo] = useState(0);
   const [, setVersion] = useState(0);
   const [marking, setMarking] = useState<SessionLearner>();
   const [reason, setReason] = useState("");
@@ -140,18 +102,17 @@ export function ClassAttendance({ pageId, record }: { pageId: string; record: Da
   const [gallery, setGallery] = useState(false);
   const [report, setReport] = useState(false);
   const base = useMemo(() => classSessionFor(pageId, record, date), [pageId, record, date]);
-  if (!base) return null;
-  const storeKey = `${record.id}|${base.date}`;
-  const session = applyMarks(base, marksStore.get(storeKey) ?? {});
-  const dates = sessionDates(base.today);
-  const { counts } = session;
+  const storeKey = base ? `${record.id}|${base.date}` : "";
+  const session = base && applyMarks(base, marksStore.get(storeKey) ?? {});
   const q = query.trim().toLowerCase();
-  const rows = session.learners.filter(
+  const rows = (session?.learners ?? []).filter(
     (l) => (filter === "all" || l.status === filter) && (!q || `${l.name} ${l.uid}`.toLowerCase().includes(q)),
   );
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const current = Math.min(pageNo, pages - 1);
-  const visible = rows.slice(current * PAGE_SIZE, current * PAGE_SIZE + PAGE_SIZE);
+  // Paging holds state, so it runs before the early return.
+  const { index: current, visible, setIndex: setPageNo } = usePaged(rows, PAGE_SIZE);
+  if (!base || !session) return null;
+  const dates = sessionDates(base.today);
+  const { counts } = session;
   const rate = counts.total ? Math.round((counts.attended / counts.total) * 1000) / 10 : 0;
   const chips = (
     session.upcoming
@@ -202,7 +163,7 @@ export function ClassAttendance({ pageId, record }: { pageId: string; record: Da
   );
   const image = (l: SessionLearner) =>
     captured(l) ? (
-      <RecordMedia record={mediaRecord(record, l, session.title)} />
+      <RecordMedia record={learnerMedia(record, l, session.title)} />
     ) : (
       <Txt size={12} color={c.muted}>
         {l.status === "scheduled" ? "After start" : "Not captured"}
@@ -273,33 +234,18 @@ export function ClassAttendance({ pageId, record }: { pageId: string; record: Da
           </View>
         )}
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          {chips.map(([key, label, n]) => {
-            const selected = filter === key;
-            return (
-              <Pressable
-                key={key}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                accessibilityLabel={`${label} ${n}`}
-                onPress={() => {
-                  setFilter(key);
-                  setPageNo(0);
-                }}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 7,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: selected ? c.actionPrimary : c.border,
-                  backgroundColor: selected ? c.actionPrimary : c.surface,
-                }}
-              >
-                <Txt size={12} bold color={selected ? c.actionInk : c.text}>
-                  {`${label} · ${n}`}
-                </Txt>
-              </Pressable>
-            );
-          })}
+          {chips.map(([key, label, n]) => (
+            <Chip
+              key={key}
+              label={`${label} · ${n}`}
+              accessibilityLabel={`${label} ${n}`}
+              selected={filter === key}
+              onPress={() => {
+                setFilter(key);
+                setPageNo(0);
+              }}
+            />
+          ))}
           <View style={{ flexGrow: 1, flexBasis: 200, maxWidth: mobile ? undefined : 280, marginLeft: mobile ? 0 : "auto" }}>
             <Field
               value={query}
@@ -429,16 +375,24 @@ export function ClassAttendance({ pageId, record }: { pageId: string; record: Da
                   {cell(l.duration, COLUMNS.duration)}
                   <View style={{ width: COLUMNS.image }}>{image(l)}</View>
                   <View style={{ width: COLUMNS.video }}>
-                    <IconAction
-                      icon="play"
+                    <IconButton
+                      variant="filled"
+                      shape="round"
+                      size={34}
+                      iconSize={15}
+                      name="play"
                       label={`Play recording for ${l.name}`}
                       disabled={!captured(l)}
                       onPress={() => setPlaying(l)}
                     />
                   </View>
                   <View style={{ width: COLUMNS.mark }}>
-                    <IconAction
-                      icon="check"
+                    <IconButton
+                      variant="filled"
+                      shape="round"
+                      size={34}
+                      iconSize={15}
+                      name="check"
                       label={`Mark ${l.name} ${nextMark(l)}`}
                       disabled={session.upcoming}
                       onPress={() => setMarking(l)}
@@ -450,15 +404,7 @@ export function ClassAttendance({ pageId, record }: { pageId: string; record: Da
           </ScrollView>
         )}
         {rows.length > PAGE_SIZE && (
-          <Row style={{ justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-            <Txt size={12} color={c.muted}>
-              {`${current * PAGE_SIZE + 1}–${Math.min(rows.length, (current + 1) * PAGE_SIZE)} of ${rows.length}`}
-            </Txt>
-            <Row style={{ gap: 8 }}>
-              <Button compact label="Previous" disabled={current === 0} onPress={() => setPageNo(current - 1)} />
-              <Button compact label="Next" disabled={current >= pages - 1} onPress={() => setPageNo(current + 1)} />
-            </Row>
-          </Row>
+          <Pager index={current} pageSize={PAGE_SIZE} total={rows.length} onChange={setPageNo} style={{ gap: 10, flexWrap: "wrap" }} />
         )}
         <Txt size={11} color={c.muted}>
           Manual marks are kept for this session and shown as Type · Manual.
@@ -488,7 +434,7 @@ export function ClassAttendance({ pageId, record }: { pageId: string; record: Da
       )}
       {playing && (
         <Dialog title={`Recording · ${playing.name}`} onClose={() => setPlaying(undefined)} wide>
-          <MediaPlayer record={mediaRecord(record, playing, session.title, true)} />
+          <MediaPlayer record={learnerMedia(record, playing, session.title, true)} />
         </Dialog>
       )}
       {gallery && (
@@ -496,7 +442,7 @@ export function ClassAttendance({ pageId, record }: { pageId: string; record: Da
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
             {session.learners.filter(captured).map((l) => (
               <View key={l.uid} style={{ width: 110, gap: 6 }}>
-                <RecordMedia record={mediaRecord(record, l, session.title)} />
+                <RecordMedia record={learnerMedia(record, l, session.title)} />
                 <Txt size={12} bold lines={1}>
                   {l.name}
                 </Txt>

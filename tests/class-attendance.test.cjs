@@ -1,28 +1,11 @@
+const { educationWithExtensions } = require("./helpers.cjs");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { classSession, sessionCsv } = require("../src/domain/classes/attendance.ts");
+const { classSession, sessionCsv, sessionRows } = require("../src/domain/classes/attendance.ts");
 
-function education() {
-  const d = structuredClone(require("../src/domain/contracts/data/education.json"));
-  for (const [file, fn] of [
-    ["learnerExtension", "customerAdminLearners"],
-    ["gateExtension", "gateAttendance"],
-    ["wardenExtension", "wardenProduct"],
-    ["sourcesExtension", "sourcesAndSetup"],
-    ["surveillanceExtension", "surveillanceUsers"],
-  ])
-    require("../src/domain/contracts/" + file + ".ts")[fn](
-      fn === "customerAdminLearners" ? d.pages : d,
-      require("../src/domain/surveillance/samples.json"),
-    );
-  require("../src/domain/contracts/demoData.ts").populateDemoData(d);
-  return d;
-}
-const d = education();
+const d = educationWithExtensions();
 const classes = (role) => d.pages[role].product["Class & Lab Attendance"];
-const related = Object.values(d.pages).flatMap((areas) =>
-  ["Classes", "Labs"].flatMap((tab) => areas.product["Class & Lab Attendance"]?.[tab]?.records ?? []),
-);
+const related = sessionRows(d);
 const statuses = (s) => s.learners.map((l) => l.uid + ":" + l.status).join(",");
 
 test("a class session lists every learner and agrees with its row", () => {

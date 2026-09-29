@@ -1,3 +1,4 @@
+const { INDUSTRY_IDS: ids, contract } = require("./helpers.cjs");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const {
@@ -18,10 +19,7 @@ const {
   showHomeMetric,
 } = require("../src/domain/contracts/priority.ts");
 const { cellText } = require("../src/domain/contracts/logic.ts");
-const ids = ["education", "corporate", "retail", "manufacturing"];
-const data = Object.fromEntries(
-  ids.map((id) => [id, require(`../src/domain/contracts/data/${id}.json`)]),
-);
+const data = Object.fromEntries(ids.map((id) => [id, contract(id)]));
 
 test("every persona has its own mission profile (29 in total)", () => {
   let count = 0;

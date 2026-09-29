@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-import { View } from "react-native";
+import { useState } from "react";
 import { useApp } from "../../../application/AppProvider";
 import type {
   Action,
@@ -9,7 +8,6 @@ import type {
 import {
   actionKind,
   canAct,
-  scopedRecords,
 } from "../../../domain/contracts/logic";
 import { transitionFor } from "../../../domain/contracts/lifecycle";
 import { useTheme } from "../../../shared/theme/Theme";

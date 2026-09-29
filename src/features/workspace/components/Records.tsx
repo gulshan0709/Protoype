@@ -25,11 +25,15 @@ import {
   Badge,
   EmptyState,
   Button,
+  Card,
   Field,
+  Pager,
+  usePaged,
 } from "../../../shared/ui/Primitives";
 import { Icon } from "../../../shared/ui/Icon";
 import { Select } from "../../../shared/ui/Select";
 import { Dialog } from "../../../shared/ui/Dialog";
+import { humanize } from "../../../shared/ui/format";
 import { useApp } from "../../../application/AppProvider";
 import {
   columnOptions,
@@ -48,11 +52,47 @@ const STATUS_MIN = 116;
 const STATUS_MAX = 220;
 const ACTIONS_MIN = 35;
 const CAPTURE_ROW_HEIGHT = 74;
+const PAGE_SIZE = 10;
+/** Search reaches the table this long after the last keystroke. */
+const QUERY_DELAY = 150;
 const columnStyle = (index: number) => ({
   flex: index === 0 ? 1.35 : 1,
   minWidth: 0,
   paddingRight: 12,
 });
+/** The status filter: records by the label of their tone. */
+const STATUS_FILTERS = [
+  { label: "All statuses", value: "" },
+  ...[
+    "Healthy",
+    "Needs attention",
+    "Critical",
+    "Pending",
+    "Source unavailable",
+    "Complete",
+    "Open",
+  ].map((label) => ({ label, value: label })),
+];
+// Phone card layout: the title fills the header row; values sit right of their label.
+const CARD_TITLE = { flex: 1, minWidth: 0 } as const;
+const CARD_VALUE = { flex: 1.4, minWidth: 0, alignItems: "flex-end" } as const;
+type Column = ReturnType<typeof columnOptions>[number];
+/** People a row names: its identity, else a first cell naming a person, and other cells' people. */
+interface RowPeople {
+  identity: ReturnType<typeof personIdentity>;
+  lead?: PersonChipProps;
+  cells: Record<string, PersonChipProps | undefined>;
+}
+/** A rendered row action, or undefined when the row has none. */
+function actionOf(
+  render: (row: DataRecord) => React.ReactNode,
+  row: DataRecord,
+) {
+  const action = render(row);
+  return action === null || action === undefined || action === false
+    ? undefined
+    : action;
+}
 /** Width that grows to the widest reported content, between min and max. */
 function useFitWidth(min: number, max: number) {
   const [width, setWidth] = useState(min);
@@ -64,6 +104,129 @@ function useFitWidth(min: number, max: number) {
     [max],
   );
   return [width, measure] as const;
+}
+function FilterField({
+  label,
+  mobile,
+  children,
+}: {
+  label: string;
+  mobile: boolean;
+  children: React.ReactNode;
+}) {
+  const c = useTheme();
+  return (
+    <View
+      style={{
+        flexGrow: mobile ? 0 : 1,
+        flexBasis: mobile ? "100%" : 120,
+        minWidth: 0,
+        gap: 5,
+      }}
+    >
+      <Txt size={11} color={c.muted}>
+        {mobile ? label : label.toUpperCase()}
+      </Txt>
+      {children}
+    </View>
+  );
+}
+/**
+ * One value of a record: a table cell under its header, or on a phone card
+ * the card's title (first column) or a right-aligned value. The first column
+ * shows the row's identity; other cells show a capture, a person or text.
+ */
+function RecordCell({
+  row,
+  col,
+  index,
+  people,
+  hasCapture,
+  layout,
+  onOpen,
+  onCapture,
+}: {
+  row: DataRecord;
+  col: Column;
+  index: number;
+  people?: RowPeople;
+  hasCapture: boolean;
+  layout: "table" | "card";
+  onOpen: (record: DataRecord) => void;
+  /** Opens the person's capture gallery from the Capture column. */
+  onCapture?: (record: DataRecord) => void;
+}) {
+  const c = useTheme();
+  const card = layout === "card";
+  const title = card && index === 0;
+  if (col.id === "capture" && !title)
+    return (
+      <RecordMedia
+        record={row}
+        onOpen={onCapture ? () => onCapture(row) : undefined}
+      />
+    );
+  if (index === 0 && people?.identity) {
+    const identity = <UserIdentity record={row} />;
+    // With a Capture column the row is not one button (the capture is its
+    // own), so the identity opens the record.
+    if (hasCapture)
+      return (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${row.detail.title}`}
+          onPress={(event) => {
+            event.stopPropagation();
+            onOpen(row);
+          }}
+          style={CARD_TITLE}
+        >
+          {identity}
+        </Pressable>
+      );
+    return card ? <View style={CARD_TITLE}>{identity}</View> : identity;
+  }
+  // Any other cell naming a person (host, owner, approver…).
+  const person = title ? people?.lead : people?.cells[col.id];
+  if (person) {
+    const chip = (
+      <PersonChip {...person} align={card && !title ? "end" : "start"} />
+    );
+    return card ? (
+      <View style={title ? CARD_TITLE : CARD_VALUE}>{chip}</View>
+    ) : (
+      chip
+    );
+  }
+  const text = cellText(row.cells[col.id]);
+  if (card)
+    return (
+      <Txt
+        size={title ? 13 : 12}
+        bold={title}
+        style={title ? { flex: 1 } : { flex: 1.4, textAlign: "right" }}
+      >
+        {text}
+      </Txt>
+    );
+  const secondary = cellSecondary(row.cells[col.id]);
+  return (
+    <>
+      <Txt size={12} bold={index === 0}>
+        {text}
+      </Txt>
+      {!!secondary && (
+        <Txt size={11} color={c.muted}>
+          {secondary}
+        </Txt>
+      )}
+      {index === 0 && row.type !== "surveillance_user" && (
+        <Txt size={11} color={c.subtle}>
+          {humanize(row.type)}
+        </Txt>
+      )}
+    </>
+  );
 }
 export function Records({
   page,
@@ -100,10 +263,18 @@ export function Records({
     page.id,
     page.columns.map((column) => column.id),
   ]);
-  const selected = visibleColumnIds(page, app.columnPreferences[preferenceKey]);
-  const columns = columnOptions(page).filter(
-    (column) =>
-      column.id !== RECORD_STATUS_COLUMN && selected.includes(column.id),
+  const preference = app.columnPreferences[preferenceKey];
+  const selected = useMemo(
+    () => visibleColumnIds(page, preference),
+    [page, preference],
+  );
+  const columns = useMemo(
+    () =>
+      columnOptions(page).filter(
+        (column) =>
+          column.id !== RECORD_STATUS_COLUMN && selected.includes(column.id),
+      ),
+    [page, selected],
   );
   const showStatus = selected.includes(RECORD_STATUS_COLUMN);
   const { width } = useWindowDimensions();
@@ -112,6 +283,21 @@ export function Records({
   // Pages that open a person's capture gallery from the Capture column.
   const gallery = personGalleryEnabled(page);
   const [galleryFor, setGalleryFor] = useState<DataRecord>();
+  // The search box answers every keystroke; the rows follow after a pause, so
+  // typing does not re-filter and re-render the page for each letter.
+  const [text, setText] = useState(query);
+  useEffect(() => {
+    if (!query) setText("");
+  }, [query]);
+  useEffect(() => {
+    if (text === query) return;
+    const timer = setTimeout(() => onQuery(text), QUERY_DELAY);
+    return () => clearTimeout(timer);
+  }, [text]);
+  const clear = () => {
+    setText("");
+    onClear();
+  };
   const activeFilterCount = Object.values(filters).filter(
     (value) => value && !/^(all\b|across\b|current$)/i.test(value),
   ).length;
@@ -119,10 +305,6 @@ export function Records({
     setFiltersOpen(false);
   }, [mobile, page.id, app.workspace.scope]);
   const [sort, setSort] = useState({ key: "", asc: true });
-  const [index, setIndex] = useState(0);
-  useEffect(() => {
-    setIndex(0);
-  }, [query, filters, page.id, app.workspace.scope]);
   const activeSortKey = columns.some((column) => column.id === sort.key)
     ? sort.key
     : "";
@@ -143,62 +325,87 @@ export function Records({
         : rows,
     [rows, activeSortKey, sort.asc],
   );
-  const maxPage = Math.max(0, Math.ceil(sorted.length / 10) - 1);
-  const current = Math.min(index, maxPage);
-  const visible = sorted.slice(current * 10, current * 10 + 10);
-  const actionFor = (row: DataRecord) => {
-    const action = renderRowActions?.(row);
-    return action === null || action === undefined || action === false
-      ? undefined
-      : action;
-  };
+  const { index, visible, setIndex } = usePaged(sorted, PAGE_SIZE);
+  useEffect(() => {
+    setIndex(0);
+  }, [query, filters, page.id, app.workspace.scope]);
   // One trailing actions column is reserved for the whole table as soon as
-  // any row has an action; rows without one leave it empty.
-  const firstAction = rows.find((row) => actionFor(row) !== undefined);
-  const hasActions = !!firstAction;
+  // any row has an action; rows without one leave it empty. Each action is
+  // rendered once: the first one found, and those of the rows on this page.
+  const firstAction = useMemo(() => {
+    if (!renderRowActions) return undefined;
+    for (const row of rows) {
+      const action = actionOf(renderRowActions, row);
+      if (action !== undefined) return action;
+    }
+    return undefined;
+  }, [rows, renderRowActions]);
+  const actions = useMemo(
+    () =>
+      new Map(
+        visible.map((row) => [
+          row.id,
+          renderRowActions ? actionOf(renderRowActions, row) : undefined,
+        ]),
+      ),
+    [visible, renderRowActions],
+  );
+  const hasActions = firstAction !== undefined;
   const [statusWidth, measureStatus] = useFitWidth(STATUS_MIN, STATUS_MAX);
   const [actionsWidth, measureActions] = useFitWidth(ACTIONS_MIN, 320);
   const hasCapture = columns.some((col) => col.id === "capture");
+  const onCapture = gallery ? setGalleryFor : undefined;
   const [headingContext, headingTitle] = page.heading.includes(" · ")
     ? page.heading.split(/ · (.*)/s).slice(0, 2)
     : [undefined, page.heading];
   // Person chips of the visible rows: the row's identity (or a first cell
   // naming a person) and every other cell naming someone else. Sorting,
   // filtering and search keep using the cell data.
-  const people = new Map(
-    visible.map((row) => {
-      const identity = personIdentity(row);
-      const lead = identity
-        ? undefined
-        : cellPerson(row.cells[page.columns[0].id]);
-      const cells: Record<string, PersonChipProps | undefined> = {};
-      columns.forEach((col, j) => {
-        if (col.id !== "capture" && (j > 0 || !identity))
-          cells[col.id] = cellPerson(
-            row.cells[col.id],
-            j > 0 ? (identity ?? lead) : undefined,
-          );
-      });
-      return [row.id, { identity, lead, cells }] as const;
-    }),
+  const people = useMemo(
+    () =>
+      new Map(
+        visible.map((row): [string, RowPeople] => {
+          const identity = personIdentity(row);
+          const lead = identity
+            ? undefined
+            : cellPerson(row.cells[page.columns[0].id]);
+          const cells: RowPeople["cells"] = {};
+          columns.forEach((col, j) => {
+            if (col.id !== "capture" && (j > 0 || !identity))
+              cells[col.id] = cellPerson(
+                row.cells[col.id],
+                j > 0 ? (identity ?? lead) : undefined,
+              );
+          });
+          return [row.id, { identity, lead, cells }];
+        }),
+      ),
+    [visible, columns, page],
+  );
+  // A row's value under its header, or on its phone card.
+  const cell = (
+    row: DataRecord,
+    col: Column,
+    index: number,
+    layout: "table" | "card",
+  ) => (
+    <RecordCell
+      row={row}
+      col={col}
+      index={index}
+      people={people.get(row.id)}
+      hasCapture={hasCapture}
+      layout={layout}
+      onOpen={onOpen}
+      onCapture={onCapture}
+    />
   );
   const filterFields = (
     <>
       {page.filters
         .filter((f) => f.id !== "state")
         .map((f) => (
-          <View
-            key={f.id}
-            style={{
-              flexGrow: mobile ? 0 : 1,
-              flexBasis: mobile ? "100%" : 120,
-              minWidth: 0,
-              gap: 5,
-            }}
-          >
-            <Txt size={11} color={c.muted}>
-              {mobile ? f.label : f.label.toUpperCase()}
-            </Txt>
+          <FilterField key={f.id} label={f.label} mobile={mobile}>
             <Select
               height={44}
               label={f.label}
@@ -211,72 +418,22 @@ export function Records({
               ]}
               onChange={(value) => onFilter(f.id, value)}
             />
-          </View>
+          </FilterField>
         ))}
-      <View
-        style={{
-          flexGrow: mobile ? 0 : 1,
-          flexBasis: mobile ? "100%" : 120,
-          minWidth: 0,
-          gap: 5,
-        }}
-      >
-        <Txt size={11} color={c.muted}>
-          {mobile ? "Status" : "STATUS"}
-        </Txt>
+      <FilterField label="Status" mobile={mobile}>
         <Select
           height={44}
           label="Filter by state"
           value={filters.state ?? ""}
-          options={[
-            { label: "All statuses", value: "" },
-            ...[
-              "healthy",
-              "attention",
-              "critical",
-              "pending",
-              "unavailable",
-              "complete",
-              "neutral",
-            ].map((tone) => ({
-              label: {
-                healthy: "Healthy",
-                attention: "Needs attention",
-                critical: "Critical",
-                pending: "Pending",
-                unavailable: "Source unavailable",
-                complete: "Complete",
-                neutral: "Open",
-              }[tone]!,
-              value: {
-                healthy: "Healthy",
-                attention: "Needs attention",
-                critical: "Critical",
-                pending: "Pending",
-                unavailable: "Source unavailable",
-                complete: "Complete",
-                neutral: "Open",
-              }[tone]!,
-            })),
-          ]}
+          options={STATUS_FILTERS}
           onChange={(value) => onFilter("state", value)}
           icon="filter"
         />
-      </View>
+      </FilterField>
     </>
   );
   return (
-    <View
-      testID="records-table"
-      style={{
-        backgroundColor: c.surface,
-        borderColor: c.border,
-        borderWidth: 1,
-        borderRadius: 12,
-        boxShadow: c.panelShadow,
-        overflow: "hidden",
-      }}
-    >
+    <Card testID="records-table" style={{ padding: 0, overflow: "hidden" }}>
       <Row
         style={{
           padding: mobile ? 12 : 16,
@@ -340,8 +497,8 @@ export function Records({
               </Txt>
             )}
             <Field
-              value={query}
-              onChange={onQuery}
+              value={text}
+              onChange={setText}
               placeholder="Search records…"
             />
           </View>
@@ -364,8 +521,8 @@ export function Records({
             <Txt size={11} color={c.muted}>
               {rows.length} records
             </Txt>
-            {(query || Object.values(filters).some(Boolean)) && (
-              <Button compact variant="ghost" label="Clear" onPress={onClear} />
+            {(text || query || Object.values(filters).some(Boolean)) && (
+              <Button compact variant="ghost" label="Clear" onPress={clear} />
             )}
           </Row>
           <Row style={{ flexShrink: 0, gap: 8 }}>
@@ -374,7 +531,14 @@ export function Records({
               selected={selected}
               onChange={(ids) => app.setColumnPreference(preferenceKey, ids)}
             />
-            <Button compact label="Export" icon="download" onPress={onExport} />
+            <Button
+              compact
+              iconOnly
+              label="Export"
+              tooltip="Download report"
+              icon="download"
+              onPress={onExport}
+            />
           </Row>
         </Row>
       </View>
@@ -401,7 +565,7 @@ export function Records({
         <EmptyState
           title="No matching records"
           description={page.states.empty}
-          action={onClear}
+          action={clear}
         />
       ) : mobile ? (
         <View style={{ paddingHorizontal: 16, gap: 12 }}>
@@ -409,11 +573,7 @@ export function Records({
             <View key={row.id} style={{ gap: 6 }}>
               <Pressable
                 testID="records-card"
-                accessibilityRole={
-                  columns.some((col) => col.id === "capture")
-                    ? undefined
-                    : "button"
-                }
+                accessibilityRole={hasCapture ? undefined : "button"}
                 accessibilityLabel={`Open ${row.detail.title}`}
                 onPress={() => onOpen(row)}
                 style={{
@@ -425,35 +585,7 @@ export function Records({
                 }}
               >
                 <Row style={{ alignItems: "center", gap: 10 }}>
-                  {people.get(row.id)?.identity ? (
-                    <>
-                      {columns.some((col) => col.id === "capture") ? (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={`Open ${row.detail.title}`}
-                          onPress={(event) => {
-                            event.stopPropagation();
-                            onOpen(row);
-                          }}
-                          style={{ flex: 1, minWidth: 0 }}
-                        >
-                          <UserIdentity record={row} />
-                        </Pressable>
-                      ) : (
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <UserIdentity record={row} />
-                        </View>
-                      )}
-                    </>
-                  ) : people.get(row.id)?.lead ? (
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <PersonChip {...people.get(row.id)!.lead!} />
-                    </View>
-                  ) : (
-                    <Txt size={13} bold style={{ flex: 1 }}>
-                      {cellText(row.cells[page.columns[0].id])}
-                    </Txt>
-                  )}
+                  {cell(row, page.columns[0], 0, "card")}
                   {showStatus && (
                     <Badge label={row.state.label} tone={row.state.tone} />
                   )}
@@ -470,7 +602,7 @@ export function Records({
                       borderTopColor: c.border,
                     }}
                   >
-                    {columns.slice(1).map((col) => (
+                    {columns.slice(1).map((col, j) => (
                       <Row
                         key={col.id}
                         style={{ alignItems: "center", gap: 12 }}
@@ -483,42 +615,15 @@ export function Records({
                         >
                           {col.label.toUpperCase()}
                         </Txt>
-                        {col.id === "capture" ? (
-                          <RecordMedia
-                            record={row}
-                            onOpen={
-                              gallery ? () => setGalleryFor(row) : undefined
-                            }
-                          />
-                        ) : people.get(row.id)?.cells[col.id] ? (
-                          <View
-                            style={{
-                              flex: 1.4,
-                              minWidth: 0,
-                              alignItems: "flex-end",
-                            }}
-                          >
-                            <PersonChip
-                              {...people.get(row.id)!.cells[col.id]!}
-                              align="end"
-                            />
-                          </View>
-                        ) : (
-                          <Txt
-                            size={12}
-                            style={{ flex: 1.4, textAlign: "right" }}
-                          >
-                            {cellText(row.cells[col.id])}
-                          </Txt>
-                        )}
+                        {cell(row, col, j + 1, "card")}
                       </Row>
                     ))}
                   </View>
                 )}
               </Pressable>
-              {actionFor(row) !== undefined && (
+              {actions.get(row.id) !== undefined && (
                 <Row style={{ justifyContent: "flex-end" }}>
-                  {actionFor(row)}
+                  {actions.get(row.id)}
                 </Row>
               )}
             </View>
@@ -543,7 +648,7 @@ export function Records({
               ),
             }}
           >
-            {firstAction && (
+            {hasActions && (
               // Hidden copy of the table's first action, measured so the
               // actions column has its width even on pages without actions.
               <View
@@ -562,7 +667,7 @@ export function Records({
                   } as object
                 }
               >
-                {actionFor(firstAction)}
+                {firstAction}
               </View>
             )}
             <View
@@ -641,7 +746,7 @@ export function Records({
                   accessibilityRole={hasCapture ? undefined : "button"}
                   accessibilityLabel={`Open ${row.detail.title}`}
                   onPress={() => onOpen(row)}
-                  style={({ pressed, hovered }: any) => ({
+                  style={({ pressed, hovered }) => ({
                     flex: 1,
                     minWidth: 0,
                     paddingLeft: TABLE_PAD,
@@ -661,53 +766,7 @@ export function Records({
                       testID="records-cell"
                       style={[columnStyle(j), { gap: 4 }]}
                     >
-                      {col.id === "capture" ? (
-                        <RecordMedia
-                          record={row}
-                          onOpen={
-                            gallery ? () => setGalleryFor(row) : undefined
-                          }
-                        />
-                      ) : j === 0 && people.get(row.id)?.identity ? (
-                        <>
-                          {columns.some((col) => col.id === "capture") ? (
-                            <Pressable
-                              accessibilityRole="button"
-                              accessibilityLabel={`Open ${row.detail.title}`}
-                              onPress={(event) => {
-                                event.stopPropagation();
-                                onOpen(row);
-                              }}
-                              style={{ flex: 1, minWidth: 0 }}
-                            >
-                              <UserIdentity record={row} />
-                            </Pressable>
-                          ) : (
-                            <UserIdentity record={row} />
-                          )}
-                        </>
-                      ) : people.get(row.id)?.cells[col.id] ? (
-                        // Any other cell naming a person (host, owner, approver…).
-                        <PersonChip {...people.get(row.id)!.cells[col.id]!} />
-                      ) : (
-                        <>
-                          <Txt size={12} bold={j === 0}>
-                            {cellText(row.cells[col.id])}
-                          </Txt>
-                          {!!cellSecondary(row.cells[col.id]) && (
-                            <Txt size={11} color={c.muted}>
-                              {cellSecondary(row.cells[col.id])}
-                            </Txt>
-                          )}
-                          {j === 0 && row.type !== "surveillance_user" && (
-                            <Txt size={11} color={c.subtle}>
-                              {row.type
-                                .replaceAll("-", " ")
-                                .replaceAll("_", " ")}
-                            </Txt>
-                          )}
-                        </>
-                      )}
+                      {cell(row, col, j, "table")}
                     </View>
                   ))}
                   {showStatus && (
@@ -740,9 +799,9 @@ export function Records({
                       justifyContent: "flex-end",
                     }}
                   >
-                    {actionFor(row) !== undefined && (
+                    {actions.get(row.id) !== undefined && (
                       <View onLayout={measureActions} style={{ flexShrink: 0 }}>
-                        {actionFor(row)}
+                        {actions.get(row.id)}
                       </View>
                     )}
                   </View>
@@ -752,41 +811,24 @@ export function Records({
           </View>
         </ScrollView>
       )}
-      <Row
+      <Pager
+        index={index}
+        pageSize={PAGE_SIZE}
+        total={rows.length}
+        onChange={setIndex}
         style={{
           padding: 17,
           borderTopWidth: 1,
           borderColor: c.border,
           marginTop: mobile ? 16 : 0,
-          justifyContent: "space-between",
         }}
-      >
-        <Txt size={11} color={c.muted}>
-          {rows.length
-            ? `${current * 10 + 1}–${Math.min(current * 10 + 10, rows.length)} of ${rows.length}`
-            : "0 records"}
-        </Txt>
-        <Row>
-          <Button
-            compact
-            label="Previous"
-            onPress={() => setIndex(current - 1)}
-            disabled={current === 0}
-          />
-          <Button
-            compact
-            label="Next"
-            onPress={() => setIndex(current + 1)}
-            disabled={current >= maxPage}
-          />
-        </Row>
-      </Row>
+      />
       {galleryFor && (
         <PersonGalleryDialog
           record={galleryFor}
           onClose={() => setGalleryFor(undefined)}
         />
       )}
-    </View>
+    </Card>
   );
 }

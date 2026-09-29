@@ -1,4 +1,5 @@
 import type { DataRecord, Industry, PageContract, Tone } from "./types";
+import { commonScopes } from "./logic";
 
 /*
  * The Corporate reference ships one generic placeholder row per site on every
@@ -57,9 +58,7 @@ const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 function build(page: PageContract, rows: AuthoredRow[], roleScopes: string[]) {
   const templates = page.records;
-  const common = templates
-    .map((r) => r.scope)
-    .reduce((a, b) => a.filter((s) => b.includes(s)));
+  const common = commonScopes(templates);
   const template = (tone: Tone) =>
     templates.find((t) => t.state.tone === tone) ??
     templates.find((t) => (tone === "complete" ? t.state.tone === "healthy" : tone === "pending" && t.state.tone === "attention")) ??

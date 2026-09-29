@@ -1,5 +1,4 @@
-import React, { useState } from "react";
-import { View } from "react-native";
+import { useState } from "react";
 import { useApp } from "../../application/AppProvider";
 import { useAppLock } from "../../application/AppLockProvider";
 import {
@@ -8,7 +7,7 @@ import {
   promptBiometrics,
 } from "../../application/appLock";
 import { useTheme } from "../../shared/theme/Theme";
-import { Button, Row, Txt } from "../../shared/ui/Primitives";
+import { Button, Divider, Row, Txt } from "../../shared/ui/Primitives";
 import { Select } from "../../shared/ui/Select";
 import { Dialog } from "../../shared/ui/Dialog";
 import { PinPad } from "./PinPad";
@@ -43,9 +42,7 @@ export function AppLockSettings() {
 
   return (
     <>
-      <View
-        style={{ height: 1, backgroundColor: c.border, marginVertical: 6 }}
-      />
+      <Divider spacing={6} />
       <Txt size={14} bold>
         App lock
       </Txt>

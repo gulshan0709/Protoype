@@ -1,4 +1,4 @@
-import React from "react";
+import { memo } from "react";
 import { View, Pressable, ScrollView } from "react-native";
 import { useApp } from "../../../application/AppProvider";
 import {
@@ -13,7 +13,7 @@ import type { Location } from "../../../domain/contracts/types";
 import { productIcon } from "../../../domain/contracts/experience";
 import { useTheme } from "../../../shared/theme/Theme";
 import { BrandMark, BrandWordmark, Icon } from "../../../shared/ui/Icon";
-import { Row, Txt } from "../../../shared/ui/Primitives";
+import { IconButton, Row, Txt } from "../../../shared/ui/Primitives";
 
 interface Props {
   location: Location;
@@ -23,7 +23,48 @@ interface Props {
   onToggle?: () => void;
 }
 
-export function Navigation({
+/** A footer entry of the sidebar: icon, and its label unless collapsed. */
+function FooterItem({
+  icon,
+  color,
+  label,
+  text,
+  collapsed,
+  onPress,
+}: {
+  icon: string;
+  color: string;
+  label: string;
+  text: string;
+  collapsed?: boolean;
+  onPress: () => void;
+}) {
+  const c = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={{
+        minHeight: 39,
+        paddingHorizontal: 13,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: collapsed ? "center" : "flex-start",
+        gap: 10,
+      }}
+    >
+      <Icon name={icon} size={17} color={color} />
+      {!collapsed && (
+        <Txt size={12} color={c.sidebarText}>
+          {text}
+        </Txt>
+      )}
+    </Pressable>
+  );
+}
+
+export const Navigation = memo(function Navigation({
   location,
   navigate,
   open,
@@ -49,7 +90,7 @@ export function Navigation({
         accessibilityState={{ selected: active }}
         aria-pressed={active}
         onPress={() => navigate(type, name)}
-        style={({ pressed, hovered }: any) => ({
+        style={({ pressed, hovered }) => ({
           minHeight: 39,
           paddingLeft: collapsed ? 7 : 10,
           paddingRight: 10,
@@ -110,30 +151,15 @@ export function Navigation({
       >
         {collapsed ? <BrandMark size={26} /> : <BrandWordmark />}
         {!!onToggle && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              collapsed ? "Expand navigation" : "Collapse navigation"
-            }
-            accessibilityState={{ expanded: !collapsed }}
-            aria-expanded={!collapsed}
+          <IconButton
+            variant="ghost"
+            name={collapsed ? "chevron" : "back"}
+            label={collapsed ? "Expand navigation" : "Collapse navigation"}
+            size={collapsed ? 28 : 32}
+            iconSize={collapsed ? 17 : 18}
+            expanded={!collapsed}
             onPress={onToggle}
-            style={({ pressed, hovered }: any) => ({
-              width: collapsed ? 28 : 32,
-              height: 32,
-              borderRadius: 8,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor:
-                pressed || hovered ? c.sidebarHover : "transparent",
-            })}
-          >
-            <Icon
-              name={collapsed ? "chevron" : "back"}
-              size={collapsed ? 17 : 18}
-              color={c.sidebarIcon}
-            />
-          </Pressable>
+          />
         )}
       </Row>
       <Pressable
@@ -271,47 +297,23 @@ export function Navigation({
           gap: 2,
         }}
       >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Ask Vizenta"
+        <FooterItem
+          icon="sparkle"
+          color={c.insights}
+          label="Ask Vizenta"
+          text="Ask Vizenta"
+          collapsed={collapsed}
           onPress={() => open("assistant")}
-          style={{
-            minHeight: 39,
-            paddingHorizontal: 13,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: collapsed ? "center" : "flex-start",
-            gap: 10,
-          }}
-        >
-          <Icon name="sparkle" size={17} color={c.insights} />
-          {!collapsed && (
-            <Txt size={12} color={c.sidebarText}>
-              Ask Vizenta
-            </Txt>
-          )}
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Settings and preferences"
+        />
+        <FooterItem
+          icon="settings"
+          color={c.sidebarIcon}
+          label="Settings and preferences"
+          text="Settings & preferences"
+          collapsed={collapsed}
           onPress={() => open("settings")}
-          style={{
-            minHeight: 39,
-            paddingHorizontal: 13,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: collapsed ? "center" : "flex-start",
-            gap: 10,
-          }}
-        >
-          <Icon name="settings" size={17} color={c.sidebarIcon} />
-          {!collapsed && (
-            <Txt size={12} color={c.sidebarText}>
-              Settings & preferences
-            </Txt>
-          )}
-        </Pressable>
+        />
       </View>
     </View>
   );
-}
+});

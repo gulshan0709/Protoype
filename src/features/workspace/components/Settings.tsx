@@ -1,13 +1,16 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { useApp } from "../../../application/AppProvider";
 import {
   useTheme,
   type ThemeStyle,
 } from "../../../shared/theme/Theme";
-import { Txt, Button, Field } from "../../../shared/ui/Primitives";
+import { Txt, Button, Divider, Field } from "../../../shared/ui/Primitives";
+import { formatAuditTime } from "../../../shared/ui/format";
+import { sameWorkspace } from "../../../domain/contracts/lifecycle";
 import { Select } from "../../../shared/ui/Select";
 import { AppLockSettings } from "../../lock/AppLockSettings";
+import { PersonAvatar } from "./PersonChip";
 export function Settings({
   onClose,
   onState,
@@ -21,6 +24,21 @@ export function Settings({
   const [error, setError] = useState("");
   return (
     <>
+      {/* Live preview: the avatar follows the name as it is typed. */}
+      <View
+        testID="settings-profile-preview"
+        style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
+      >
+        <PersonAvatar name={name.trim() || app.name} size={56} decorative />
+        <View style={{ flexShrink: 1, minWidth: 0, gap: 2 }}>
+          <Txt size={16} bold lines={1}>
+            {name.trim() || app.name}
+          </Txt>
+          <Txt size={12} color={c.muted}>
+            How you appear across Vizenta
+          </Txt>
+        </View>
+      </View>
       <Field
         label="Display name"
         value={name}
@@ -133,9 +151,7 @@ export function Settings({
         }}
       />
       <AppLockSettings />
-      <View
-        style={{ height: 1, backgroundColor: c.border, marginVertical: 6 }}
-      />
+      <Divider spacing={6} />
       <Txt size={14} bold>
         Review tools
       </Txt>
@@ -174,12 +190,7 @@ export function Settings({
         Recent activity
       </Txt>
       {app.audit
-        .filter(
-          (e) =>
-            e.workspace.industry === app.workspace.industry &&
-            e.workspace.role === app.workspace.role &&
-            e.workspace.scope === app.workspace.scope,
-        )
+        .filter((e) => sameWorkspace(e.workspace, app.workspace))
         .slice(0, 8)
         .map((e) => (
           <View
@@ -198,7 +209,7 @@ export function Settings({
               {e.reason}
             </Txt>
             <Txt size={10} color={c.subtle}>
-              {new Date(e.at).toLocaleString()}
+              {formatAuditTime(e.at)}
             </Txt>
           </View>
         ))}

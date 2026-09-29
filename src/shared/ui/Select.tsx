@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Pressable, View } from "react-native";
+import { useState } from "react";
+import { Pressable } from "react-native";
 import { Dialog } from "./Dialog";
 import { Row, Txt } from "./Primitives";
 import { Icon } from "./Icon";
@@ -49,7 +49,14 @@ export function Select({
           <Txt
             size={compact ? 11 : 12}
             color={c.actionInk}
-            style={fill ? { flex: 1 } : { flexShrink: 1 }}
+            // Longhands in both cases: switching between `flex` and
+            // `flexShrink` (the header's phone ↔ desktop resize) makes React
+            // DOM warn about a conflicting style removal.
+            style={
+              fill
+                ? { flexGrow: 1, flexShrink: 1, flexBasis: 0 }
+                : { flexGrow: 0, flexShrink: 1, flexBasis: "auto" }
+            }
             lines={1}
           >
             {current}

@@ -1,9 +1,14 @@
-import React, { useMemo, useState } from "react";
 import { View } from "react-native";
-import * as DocumentPicker from "expo-document-picker";
-import { useTheme } from "../../../shared/theme/Theme";
-import { Button, Field, Row, Txt } from "../../../shared/ui/Primitives";
-import { Select } from "../../../shared/ui/Select";
+import { Field } from "../../../shared/ui/Primitives";
+import {
+  FormActions,
+  FormCell,
+  FormGrid,
+  RequiredNote,
+  SelectField,
+} from "../../../shared/ui/Form";
+import { useFormState } from "../../../shared/ui/useFormState";
+import { fullName } from "../../../domain/common/text";
 import {
   type NewLearner,
   type Column,
@@ -14,23 +19,7 @@ import {
   emptyLearner,
   validateLearner,
 } from "../../../domain/learners/setup";
-import { PersonAvatar } from "./PersonChip";
-/** Image picker for learner photos (web, iOS Photos/Files, Android). */
-export async function pickImages(multiple: boolean) {
-  const result = await DocumentPicker.getDocumentAsync({
-    type: ["image/jpeg", "image/png", "image/gif"],
-    multiple,
-    copyToCacheDirectory: true,
-  });
-  if (result.canceled) return [];
-  return (result.assets ?? []).filter((a) =>
-    /\.(jpe?g|png|gif)$/i.test(a.name),
-  );
-}
-
-function FormCell({ children }: { children: React.ReactNode }) {
-  return <View style={{ flexGrow: 1, flexBasis: 220 }}>{children}</View>;
-}
+import { PersonImageField } from "./PersonImageField";
 
 export function AddLearnerForm({
   initial,
@@ -43,55 +32,45 @@ export function AddLearnerForm({
   onSave: (l: NewLearner) => void;
   onCancel: () => void;
 }) {
-  const c = useTheme();
-  const [form, setForm] = useState<NewLearner>(initial ?? emptyLearner());
   // Editing shows what still needs completing straight away.
-  const [submitted, setSubmitted] = useState(!!initial);
-  const [imageError, setImageError] = useState("");
-  const errors = useMemo(() => validateLearner(form), [form]);
-  const set = (k: Column) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
-  const label = (k: Column) =>
-    `${LABELS[k]}${REQUIRED.includes(k) ? " *" : ""}`;
+  const {
+    value: form,
+    setValue,
+    set,
+    err,
+    submit,
+  } = useFormState(initial ?? emptyLearner(), validateLearner, {
+    reveal: !!initial,
+  });
+  const required = (k: Column) => REQUIRED.includes(k);
   const text = (k: Column, placeholder?: string) => (
     <FormCell key={k}>
       <Field
-        label={label(k)}
+        label={`${LABELS[k]}${required(k) ? " *" : ""}`}
         value={form[k]}
         onChange={set(k)}
         placeholder={placeholder}
-        error={submitted ? errors[k] : undefined}
+        error={err(k)}
       />
     </FormCell>
   );
   const choice = (k: Column, options: string[]) => (
     <FormCell key={k}>
-      <View style={{ gap: 7 }}>
-        <Txt size={12} bold>
-          {label(k)}
-        </Txt>
-        <Select
-          label={LABELS[k]}
-          value={form[k]}
-          options={[
-            ...(REQUIRED.includes(k) ? [] : [{ label: "Not set", value: "" }]),
-            ...options.map((o) => ({ label: o, value: o })),
-          ]}
-          onChange={set(k)}
-        />
-        {submitted && !!errors[k] && (
-          <Txt size={12} color={c.critical}>
-            {errors[k]}
-          </Txt>
-        )}
-      </View>
+      <SelectField
+        label={LABELS[k]}
+        required={required(k)}
+        value={form[k]}
+        placeholder={required(k) ? undefined : "Not set"}
+        options={options}
+        onChange={set(k)}
+        error={err(k)}
+      />
     </FormCell>
   );
   return (
     <View style={{ gap: 16 }}>
-      <Txt size={12} color={c.muted}>
-        Fields marked * are required.
-      </Txt>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+      <RequiredNote />
+      <FormGrid>
         {text("uid", "e.g. 24031")}
         {text("first_name", "e.g. Aarav")}
         {text("last_name", "e.g. Mehta")}
@@ -106,62 +85,22 @@ export function AddLearnerForm({
         {text("section", "e.g. 5A")}
         {text("parentsemail", "parent@mail.com")}
         {text("parentsmobile", "10–15 digits")}
-      </View>
-      <View style={{ gap: 7 }}>
-        <Txt size={12} bold>
-          Image
-        </Txt>
-        <Row style={{ flexWrap: "wrap", gap: 10 }}>
-          {!!form.image && (
-            // Same portrait as the list: the upload, else the person's pool portrait.
-            <PersonAvatar
-              name={
-                [form.first_name, form.last_name]
-                  .map((part) => part?.trim())
-                  .filter(Boolean)
-                  .join(" ") || "New learner"
-              }
-              image={form.image}
-              size={56}
-            />
-          )}
-          <Button
-            label={form.image ? "Change image" : "Choose image"}
-            icon="camera"
-            onPress={() =>
-              void pickImages(false).then(
-                (assets) => {
-                  if (!assets.length) return;
-                  setImageError("");
-                  setForm((f) => ({ ...f, image: assets[0].uri }));
-                },
-                () => setImageError("The image could not be read."),
-              )
-            }
-          />
-          {!!form.image && (
-            <Button
-              label="Remove image"
-              onPress={() => setForm((f) => ({ ...f, image: undefined }))}
-            />
-          )}
-        </Row>
-        <Txt size={11} color={imageError ? c.critical : c.muted}>
-          {imageError ||
-            "JPEG, PNG or GIF. Used for face matching during attendance."}
-        </Txt>
-      </View>
-      <Row style={{ justifyContent: "flex-end", gap: 8 }}>
-        <Button label="Cancel" onPress={onCancel} />
-        <Button
-          label={submitLabel}
-          variant="primary"
-          onPress={() => {
-            setSubmitted(true);
-            if (!Object.keys(errors).length) onSave(form);
-          }}
-        />
-      </Row>
+      </FormGrid>
+      <PersonImageField
+        label="Image"
+        name={fullName({
+          first_name: form.first_name.trim(),
+          last_name: form.last_name.trim(),
+        })}
+        image={form.image}
+        hint="JPEG, PNG or GIF. Used for face matching during attendance."
+        onChange={(image) => setValue((f) => ({ ...f, image }))}
+      />
+      <FormActions
+        submitLabel={submitLabel}
+        onCancel={onCancel}
+        onSubmit={submit(onSave)}
+      />
     </View>
   );
 }

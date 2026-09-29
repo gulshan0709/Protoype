@@ -1,8 +1,10 @@
 import { PersonChip } from "./PersonChip";
-import React, { useState } from "react";
-import { View, Pressable } from "react-native";
+import { useState } from "react";
+import { View } from "react-native";
 import type { DataRecord } from "../../../domain/contracts/types";
 import { cellText } from "../../../domain/contracts/logic";
+import { toCsv } from "../../../domain/common/csv";
+import { isEmail } from "../../../domain/common/validation";
 import {
   NOUN,
   type Learner,
@@ -14,7 +16,12 @@ import {
 } from "../../../application/classSetupStore";
 import { useTheme } from "../../../shared/theme/Theme";
 import { Button, Field, Row, Txt } from "../../../shared/ui/Primitives";
-import { Icon } from "../../../shared/ui/Icon";
+import {
+  ErrorText,
+  FormCell,
+  FormGrid,
+  RemoveButton,
+} from "../../../shared/ui/Form";
 import { saveCsv } from "../../../shared/files/classCsv";
 
 /** Roster figure shown by the table row, if the page has one. */
@@ -27,14 +34,10 @@ function rosterOf(record: DataRecord): string | undefined {
 }
 
 function exportLearners(name: string, learners: Learner[]) {
-  const quote = (v: string) =>
-    '"' + (/^[=+\-@]/.test(v) ? "'" + v : v).replaceAll('"', '""') + '"';
-  const csv = [
+  const csv = toCsv([
     ["UID", "Name", "Email"],
     ...learners.map((l) => [l.uid, l.name, l.email]),
-  ]
-    .map((r) => r.map(quote).join(","))
-    .join("\r\n");
+  ]);
   saveCsv("class_learners.csv", `${name} learners`, csv);
 }
 
@@ -64,8 +67,7 @@ export function ClassLearners({
     const name = draft.name.trim();
     const email = draft.email.trim();
     if (!uid || !name) return setError("UID and name are required.");
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      return setError("Enter a valid email.");
+    if (email && !isEmail(email)) return setError("Enter a valid email.");
     if (learners.some((l) => l.uid.toLowerCase() === uid.toLowerCase()))
       return setError(
         `UID ${uid} is already mapped to this ${NOUN[kind].one}.`,
@@ -124,19 +126,15 @@ export function ClassLearners({
               >
                 {l.email || "—"}
               </Txt>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${l.name}`}
-                hitSlop={8}
+              <RemoveButton
+                label={`Remove ${l.name}`}
                 onPress={() =>
                   storeLearners(
                     storeKey,
                     learners.filter((x) => x.uid !== l.uid),
                   )
                 }
-              >
-                <Icon name="close" size={15} color={c.muted} />
-              </Pressable>
+              />
             </Row>
           ))
         ) : (
@@ -152,37 +150,33 @@ export function ClassLearners({
       <Txt size={12} bold>
         Map a learner
       </Txt>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-        <View style={{ flexGrow: 1, flexBasis: 110 }}>
+      <FormGrid gap={10}>
+        <FormCell basis={110}>
           <Field
             label="UID *"
             value={draft.uid}
             onChange={(uid) => setDraft((d) => ({ ...d, uid }))}
             placeholder="e.g. 24031"
           />
-        </View>
-        <View style={{ flexGrow: 2, flexBasis: 180 }}>
+        </FormCell>
+        <FormCell basis={180} grow={2}>
           <Field
             label="Name *"
             value={draft.name}
             onChange={(name) => setDraft((d) => ({ ...d, name }))}
             placeholder="e.g. Aarav Mehta"
           />
-        </View>
-        <View style={{ flexGrow: 2, flexBasis: 200 }}>
+        </FormCell>
+        <FormCell basis={200} grow={2}>
           <Field
             label="Email"
             value={draft.email}
             onChange={(email) => setDraft((d) => ({ ...d, email }))}
             placeholder="learner@college.edu"
           />
-        </View>
-      </View>
-      {!!error && (
-        <Txt size={12} color={c.critical}>
-          {error}
-        </Txt>
-      )}
+        </FormCell>
+      </FormGrid>
+      <ErrorText>{error}</ErrorText>
       <Row style={{ justifyContent: "flex-end" }}>
         <Button
           compact

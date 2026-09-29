@@ -1,22 +1,62 @@
-import React, { useState } from "react";
-import { Pressable, View } from "react-native";
+import { memo, useState } from "react";
+import { View } from "react-native";
 import type { PageContract } from "../../../domain/contracts/types";
 import { cellText } from "../../../domain/contracts/logic";
 import { isEvidencePanel } from "../../../domain/contracts/priority";
 import { useTheme } from "../../../shared/theme/Theme";
-import { Icon } from "../../../shared/ui/Icon";
 import {
-  Card,
-  Row,
-  SectionTitle,
-  Txt,
   Badge,
+  IconButton,
+  PanelCard,
+  Row,
+  Txt,
 } from "../../../shared/ui/Primitives";
 import { PersonChip, personChip } from "./PersonChip";
 
 const coverageTitle = "Data and decision coverage";
 
-export function ContextPanels({
+/** A page's sources: each one's status and what it means for decisions. */
+export function SourceRows({
+  sources,
+  truncate = false,
+}: {
+  sources: PageContract["sources"];
+  /** One line per label and impact (the narrow side rail). */
+  truncate?: boolean;
+}) {
+  const c = useTheme();
+  const lines = truncate ? 1 : undefined;
+  return (
+    <>
+      {sources.map((source) => (
+        <View
+          key={source.label}
+          style={{
+            paddingVertical: 11,
+            paddingHorizontal: 13,
+            borderTopWidth: 1,
+            borderColor: c.border,
+            gap: 4,
+          }}
+        >
+          <Row style={{ alignItems: "flex-start" }}>
+            <Txt size={12} bold lines={lines} style={{ flex: 1 }}>
+              {source.label}
+            </Txt>
+            <View style={{ maxWidth: "50%" }}>
+              <Badge label={source.value} tone={source.tone} />
+            </View>
+          </Row>
+          <Txt size={11} color={c.muted} lines={lines}>
+            {source.impact}
+          </Txt>
+        </View>
+      ))}
+    </>
+  );
+}
+
+export const ContextPanels = memo(function ContextPanels({
   page,
   evidenceCollapsed = false,
 }: {
@@ -31,47 +71,31 @@ export function ContextPanels({
     isEvidencePanel(title) && (collapsedBy[key(title)] ?? evidenceCollapsed);
   const toggle = (title: string) =>
     isEvidencePanel(title) ? (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${collapsed(title) ? "Show" : "Hide"} ${title}`}
-        accessibilityState={{ expanded: !collapsed(title) }}
-        aria-expanded={!collapsed(title)}
+      <IconButton
+        name={collapsed(title) ? "plus" : "minus"}
+        label={`${collapsed(title) ? "Show" : "Hide"} ${title}`}
+        size={28}
+        iconSize={14}
+        color={c.muted}
+        expanded={!collapsed(title)}
         onPress={() =>
           setCollapsedBy((state) => ({
             ...state,
             [key(title)]: !collapsed(title),
           }))
         }
-        style={({ pressed }) => ({
-          width: 28,
-          height: 28,
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: c.border,
-          backgroundColor: pressed ? c.primarySoft : c.surface,
-          alignItems: "center",
-          justifyContent: "center",
-        })}
-      >
-        <Icon
-          name={collapsed(title) ? "plus" : "minus"}
-          size={14}
-          color={c.muted}
-        />
-      </Pressable>
+      />
     ) : undefined;
   return (
     <View style={{ gap: 14 }}>
       {page.sidePanels.map((panel) => (
-        <Card key={panel.title} style={{ padding: 0, overflow: "hidden" }}>
-          <View style={{ paddingVertical: 11, paddingHorizontal: 14 }}>
-            <SectionTitle
-              title={panel.title}
-              subtitle={panel.subtitle}
-              truncate
-              trailing={toggle(panel.title)}
-            />
-          </View>
+        <PanelCard
+          key={panel.title}
+          title={panel.title}
+          subtitle={panel.subtitle}
+          truncate
+          trailing={toggle(panel.title)}
+        >
           {!collapsed(panel.title) &&
             panel.items.map((item, i) => (
               <Row
@@ -106,43 +130,18 @@ export function ContextPanels({
                 </View>
               </Row>
             ))}
-        </Card>
+        </PanelCard>
       ))}
-      <Card style={{ padding: 0, overflow: "hidden" }}>
-        <View style={{ paddingVertical: 11, paddingHorizontal: 14 }}>
-          <SectionTitle
-            title={coverageTitle}
-            subtitle="Sources used by this page"
-            truncate
-            trailing={toggle(coverageTitle)}
-          />
-        </View>
-        {!collapsed(coverageTitle) &&
-          page.sources.map((source) => (
-            <View
-              key={source.label}
-              style={{
-                paddingVertical: 11,
-                paddingHorizontal: 13,
-                borderTopWidth: 1,
-                borderColor: c.border,
-                gap: 4,
-              }}
-            >
-              <Row style={{ alignItems: "flex-start" }}>
-                <Txt size={12} bold lines={1} style={{ flex: 1 }}>
-                  {source.label}
-                </Txt>
-                <View style={{ maxWidth: "50%" }}>
-                  <Badge label={source.value} tone={source.tone} />
-                </View>
-              </Row>
-              <Txt size={11} color={c.muted} lines={1}>
-                {source.impact}
-              </Txt>
-            </View>
-          ))}
-      </Card>
+      <PanelCard
+        title={coverageTitle}
+        subtitle="Sources used by this page"
+        truncate
+        trailing={toggle(coverageTitle)}
+      >
+        {!collapsed(coverageTitle) && (
+          <SourceRows sources={page.sources} truncate />
+        )}
+      </PanelCard>
     </View>
   );
-}
+});

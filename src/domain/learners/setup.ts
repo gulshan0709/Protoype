@@ -1,4 +1,18 @@
 import type { DataRecord, PageContract, Workspace } from "../contracts/types";
+import { fullName, str } from "../common/text";
+import { readUploadTable, type UploadRow } from "../common/upload";
+import {
+  ISO_DATE,
+  isEmail,
+  isPhone,
+  isRealDate,
+} from "../common/validation";
+import {
+  cellsFor,
+  editSourceRecord,
+  sessionEvent,
+  sessionId,
+} from "../contracts/sessionRecords";
 export const LEARNER_COLUMNS = [
   "uid",
   "first_name",
@@ -43,29 +57,21 @@ export const emptyLearner = (): NewLearner =>
     type: "Learner",
   }) as NewLearner;
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE = /^\+?\d{10,15}$/;
-
 /** Field-level problems for one learner; empty when valid. */
 export function validateLearner(
   l: NewLearner,
 ): Partial<Record<Column, string>> {
   const e: Partial<Record<Column, string>> = {};
   for (const k of REQUIRED) if (!l[k].trim()) e[k] = `${LABELS[k]} is required`;
-  if (l.email && !EMAIL.test(l.email)) e.email = "Enter a valid email";
-  if (l.parentsemail && !EMAIL.test(l.parentsemail))
+  if (l.email && !isEmail(l.email)) e.email = "Enter a valid email";
+  if (l.parentsemail && !isEmail(l.parentsemail))
     e.parentsemail = "Enter a valid email";
-  if (l.mobile && !PHONE.test(l.mobile.replace(/[\s-]/g, "")))
-    e.mobile = "Use 10–15 digits";
-  if (l.parentsmobile && !PHONE.test(l.parentsmobile.replace(/[\s-]/g, "")))
+  if (l.mobile && !isPhone(l.mobile, 10)) e.mobile = "Use 10–15 digits";
+  if (l.parentsmobile && !isPhone(l.parentsmobile, 10))
     e.parentsmobile = "Use 10–15 digits";
   if (l.dob) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(l.dob)) e.dob = "Use YYYY-MM-DD";
-    else if (
-      Number.isNaN(Date.parse(l.dob)) ||
-      new Date(l.dob).toISOString().slice(0, 10) !== l.dob
-    )
-      e.dob = "Enter a valid date";
+    if (!ISO_DATE.test(l.dob)) e.dob = "Use YYYY-MM-DD";
+    else if (!isRealDate(l.dob)) e.dob = "Enter a valid date";
     else if (new Date(l.dob) > new Date()) e.dob = "DOB is in the future";
   }
   if (
@@ -81,8 +87,6 @@ export function validateLearner(
   return e;
 }
 
-export const learnerName = (l: NewLearner) =>
-  [l.first_name, l.last_name].filter(Boolean).join(" ");
 const academicPath = (l: NewLearner) =>
   [l.Department_name, l.program, l.section && `Sem ${l.section}`]
     .filter(Boolean)
@@ -93,61 +97,38 @@ export function listedUids(rows: DataRecord[]): string[] {
   return rows.map((row) => learnerFromRecord(row).uid).filter(Boolean);
 }
 
-export type LearnerStatus = "Valid" | "Invalid" | "Duplicate" | "Existing";
-export interface LearnerRow {
-  key: number;
-  data: NewLearner;
-  status: LearnerStatus;
-  message: string;
-}
-
 /** Classify rows before saving; existing UIDs cannot be added again. */
 export function checkLearnerUpload(
   table: string[][],
   existingUids: string[],
-): { rows: LearnerRow[]; error?: string } {
-  if (!table.length) return { rows: [], error: "The file is empty." };
-  const norm = (h: string) => h.trim().toLowerCase().replace(/\s+/g, "_");
-  const header = table[0].map(norm);
-  if (new Set(header).size !== header.length)
-    return { rows: [], error: "Duplicate column headers." };
-  const index = Object.fromEntries(
-    LEARNER_COLUMNS.map((k) => [k, header.indexOf(norm(k))]),
-  ) as Record<Column, number>;
-  const missing = REQUIRED.filter((k) => index[k] < 0);
-  if (missing.length)
-    return {
-      rows: [],
-      error: `Missing template columns: ${missing.join(", ")}. Download the template and keep its header row.`,
-    };
+): { rows: UploadRow<NewLearner>[]; error?: string } {
   const existing = new Set(existingUids.map((u) => u.trim().toLowerCase()));
   const seen = new Set<string>();
-  const rows = table.slice(1).map((values, i): LearnerRow => {
-    const data = emptyLearner();
-    for (const k of LEARNER_COLUMNS)
-      data[k] = index[k] >= 0 ? (values[index[k]] ?? "").trim() : "";
-    const errors = Object.values(validateLearner(data));
-    if (values.length !== header.length)
-      errors.push("Row has the wrong number of fields");
-    const uid = data.uid.toLowerCase();
-    let status: LearnerStatus = "Valid";
-    let message = "Ready to add";
-    if (errors.length) {
-      status = "Invalid";
-      message = errors.join("; ");
-    } else if (seen.has(uid)) {
-      status = "Duplicate";
-      message = `UID ${data.uid} appears more than once in this file`;
-    } else if (existing.has(uid)) {
-      status = "Existing";
-      message = `UID ${data.uid} is already listed; remove this row before saving`;
-    }
-    seen.add(uid);
-    return { key: i, data, status, message };
+  return readUploadTable(table, {
+    columns: LEARNER_COLUMNS,
+    required: REQUIRED,
+    empty: emptyLearner,
+    noun: "learners",
+    validate: validateLearner,
+    classify: (data, valid) => {
+      const uid = data.uid.toLowerCase();
+      const verdict = !valid
+        ? undefined
+        : seen.has(uid)
+          ? {
+              status: "Duplicate" as const,
+              message: `UID ${data.uid} appears more than once in this file`,
+            }
+          : existing.has(uid)
+            ? {
+                status: "Existing" as const,
+                message: `UID ${data.uid} is already listed; remove this row before saving`,
+              }
+            : undefined;
+      seen.add(uid);
+      return verdict;
+    },
   });
-  if (!rows.length)
-    return { rows, error: "The file has a header row but no learners." };
-  return { rows };
 }
 
 /** Builds a table record in the shape of the page the learner is added to. */
@@ -159,10 +140,9 @@ export function learnerRecord(
   source: string,
   previous?: DataRecord,
 ): DataRecord {
-  const name = learnerName(l);
-  const label = `${name} · ${l.uid}`;
+  const label = `${fullName(l)} · ${l.uid}`;
   const path = academicPath(l) || "—";
-  const byColumn: Record<string, string> = {
+  const cells = cellsFor(page, {
     learner: label,
     path,
     classes: "0",
@@ -171,48 +151,31 @@ export function learnerRecord(
     exceptions: "0",
     mapping: "Pending",
     state: "Prepare",
-  };
-  const cells = Object.fromEntries(
-    page.columns.map((col) => [col.id, byColumn[col.id] ?? "—"]),
-  );
-  const event = { time: "Just now", event: source, actor };
-  if (previous && !previous.sessionCreated) {
+  });
+  const event = sessionEvent(source, actor);
+  if (previous && !previous.sessionCreated)
     // Editing a source row: update identity and path only, keep its status
     // and attendance measurements, which come from the source services.
-    const owned = new Set(["learner", "path"]);
-    return {
-      ...previous,
+    return editSourceRecord(previous, {
+      page,
       setup: l,
       setupKind: "learner",
-      cells: Object.fromEntries(
-        page.columns.map((col) => [
-          col.id,
-          owned.has(col.id) ? cells[col.id] : previous.cells[col.id],
-        ]),
-      ),
-      detail: {
-        ...previous.detail,
-        title: label,
-        sections: [
-          ...previous.detail.sections.filter(
-            (section) => section.title !== "Learner configuration",
-          ),
-          {
-            title: "Learner configuration",
-            items: LEARNER_COLUMNS.map((key) => ({
-              label: LABELS[key],
-              value: l[key] || "-",
-            })),
-          },
-        ],
-        timeline: [event, ...previous.detail.timeline],
-      },
-    };
-  }
+      cells,
+      owned: ["learner", "path"],
+      title: label,
+      sections: [
+        {
+          title: "Learner configuration",
+          items: LEARNER_COLUMNS.map((key) => ({
+            label: LABELS[key],
+            value: l[key] || "-",
+          })),
+        },
+      ],
+      event,
+    });
   return {
-    id:
-      previous?.id ??
-      `NEW-LRN-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    id: previous?.id ?? sessionId("LRN"),
     sessionCreated: true,
     type: "learner",
     setup: l,
@@ -267,14 +230,13 @@ export function learnerRecord(
 export function learnerFromRecord(record: DataRecord): NewLearner {
   if (record.setup) return { ...(record.setup as NewLearner) };
   const form = emptyLearner();
-  const text = (v: unknown) => (typeof v === "string" ? v : "");
-  const first = text(record.cells.learner);
+  const first = str(record.cells.learner);
   const [name, uid] = first.split(" · ");
   const words = (name ?? "").trim().split(/\s+/);
   form.first_name = words[0] ?? "";
   form.last_name = words.slice(1).join(" ");
   form.uid = (uid ?? "").replace(/^UID\s*/i, "").trim();
-  const path = text(record.cells.path).split(" · ");
+  const path = str(record.cells.path).split(" · ");
   if (path[0] && path[0] !== "—") form.Department_name = path[0];
   if (path[1]) form.program = path[1];
   if (path[2]) form.section = path[2].replace(/^Sem\s*/i, "");
@@ -287,6 +249,7 @@ export function learnerSetupEnabled(w: Workspace, pageId?: string) {
     (
       {
         customer_admin: "ca-class-learners",
+        vizenta_admin: "va-class-learners",
         dean: "dean-learners",
         coordinator: "coordinator-learners",
       } as Record<string, string>

@@ -4,6 +4,16 @@ import type {
   Tone,
   Workspace,
 } from "../contracts/types";
+import { isAggregateScope } from "../contracts/logic";
+import {
+  cellsFor,
+  editSourceRecord,
+  sessionEvent,
+  sessionId,
+} from "../contracts/sessionRecords";
+import { readUploadTable, type UploadRow } from "../common/upload";
+import { isEmail, isRealDate, TIME } from "../common/validation";
+export { parseCsv } from "../common/csv";
 
 export type SetupKind = "class" | "lab";
 export const NOUN = {
@@ -93,7 +103,7 @@ export function validateClass(
     if (!c[k].trim()) e[k] = `${labelFor(k, kind)} is required`;
   if (c.capacity && !/^[1-9]\d*$/.test(c.capacity))
     e.capacity = "Capacity must be a whole number";
-  if (c.faculty_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.faculty_email))
+  if (c.faculty_email && !isEmail(c.faculty_email))
     e.faculty_email = "Enter a valid email";
   if (c.Tag && !CLASS_TAGS.some((t) => t.toLowerCase() === c.Tag.toLowerCase()))
     e.Tag = `Tag must be one of ${CLASS_TAGS.join(", ")}`;
@@ -104,22 +114,13 @@ export function validateClass(
     )
   )
     e.attendance_type = "Use Snapshot or Continuous";
-  const date = /^\d{4}-\d{2}-\d{2}$/;
-  for (const k of ["start_date", "end_date"] as const) {
-    if (!c[k]) continue;
-    const parsed = new Date(`${c[k]}T00:00:00Z`);
-    if (
-      !date.test(c[k]) ||
-      !Number.isFinite(parsed.getTime()) ||
-      parsed.toISOString().slice(0, 10) !== c[k]
-    )
+  for (const k of ["start_date", "end_date"] as const)
+    if (c[k] && !isRealDate(c[k]))
       e[k] = "Use a valid date in YYYY-MM-DD format";
-  }
   if (!e.start_date && !e.end_date && c.start_date && c.end_date)
     if (c.end_date < c.start_date) e.end_date = "End date is before start date";
-  const time = /^([01]\d|2[0-3]):[0-5]\d$/;
   for (const k of ["start_time", "end_time"] as const)
-    if (c[k] && !time.test(c[k])) e[k] = "Use 24-hour HH:MM";
+    if (c[k] && !TIME.test(c[k])) e[k] = "Use 24-hour HH:MM";
   if (!e.start_time && !e.end_time && c.start_time && c.end_time)
     if (c.end_time <= c.start_time) e.end_time = "End time must be after start";
   if (c.day) {
@@ -134,48 +135,6 @@ export function validateClass(
   return e;
 }
 
-/** Minimal RFC 4180 CSV reader (quoted fields, escaped quotes, CRLF). */
-export function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = "";
-  let quoted = false;
-  const src = text.replace(/^\uFEFF/, "");
-  for (let i = 0; i < src.length; i++) {
-    const ch = src[i];
-    if (quoted) {
-      if (ch === '"' && src[i + 1] === '"') {
-        cell += '"';
-        i++;
-      } else if (ch === '"') quoted = false;
-      else cell += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === ",") {
-      row.push(cell);
-      cell = "";
-    } else if (ch === "\n" || ch === "\r") {
-      if (ch === "\r" && src[i + 1] === "\n") i++;
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = "";
-    } else cell += ch;
-  }
-  if (quoted) throw new Error("A quoted CSV field is not closed.");
-  if (cell || row.length) {
-    row.push(cell);
-    rows.push(row);
-  }
-  return rows.filter((r) => r.some((v) => v.trim()));
-}
-
-export type UploadStatus = "Valid" | "Invalid" | "Duplicate" | "Existing";
-export interface UploadRow {
-  key: number;
-  data: NewClass;
-  status: UploadStatus;
-  message: string;
-}
 export const classKey = (c: NewClass) =>
   [c.class_name, c.section, c.day, c.start_time]
     .map((v) => v.trim().toLowerCase())
@@ -186,59 +145,42 @@ export function checkUpload(
   table: string[][],
   existingNames: string[],
   kind: SetupKind = "class",
-): { rows: UploadRow[]; error?: string } {
+): { rows: UploadRow<NewClass>[]; error?: string } {
   const noun = NOUN[kind];
-  if (!table.length) return { rows: [], error: "The file is empty." };
-  const norm = (h: string) => h.trim().toLowerCase().replace(/\s+/g, "_");
-  const header = table[0].map(norm);
-  if (new Set(header).size !== header.length)
-    return { rows: [], error: "The CSV contains duplicate column headings." };
-  const index = Object.fromEntries(
-    TEMPLATE_COLUMNS.map((k) => [k, header.indexOf(norm(k))]),
-  ) as Record<Column, number>;
-  // The lab template names its first column lab_name.
-  if (index.class_name < 0) index.class_name = header.indexOf("lab_name");
-  const missing = REQUIRED.filter((k) => index[k] < 0).map((k) =>
-    k === "class_name" ? `${kind}_name` : k,
-  );
-  if (missing.length)
-    return {
-      rows: [],
-      error: `Missing template columns: ${missing.join(", ")}. Download the template and keep its header row.`,
-    };
   const existing = new Set(existingNames.map((n) => n.trim().toLowerCase()));
   const seen = new Set<string>();
-  const rows = table.slice(1).map((values, i): UploadRow => {
-    const data = emptyClass();
-    for (const k of TEMPLATE_COLUMNS)
-      data[k] = index[k] >= 0 ? (values[index[k]] ?? "").trim() : "";
-    const errors = Object.values(validateClass(data, kind));
-    if (values.length !== header.length)
-      errors.push(
+  return readUploadTable(table, {
+    columns: TEMPLATE_COLUMNS,
+    required: REQUIRED,
+    empty: emptyClass,
+    noun: noun.many,
+    // The lab template names its first column lab_name.
+    alias: { class_name: "lab_name" },
+    requiredName: (k) => (k === "class_name" ? `${kind}_name` : k),
+    messages: {
+      duplicateHeaders: "The CSV contains duplicate column headings.",
+      fieldCount:
         "The row has a different number of fields than the header. Quote values containing commas.",
-      );
-    const key = classKey(data);
-    let status: UploadStatus = "Valid";
-    let message = "Ready to add";
-    if (errors.length) {
-      status = "Invalid";
-      message = errors.join("; ");
-    } else if (existing.has(data.class_name.toLowerCase())) {
-      status = "Existing";
-      message = `A ${noun.one} with this name is already listed`;
-    } else if (seen.has(key)) {
-      status = "Duplicate";
-      message = `Same ${noun.one}, section, day and start time as an earlier row`;
-    }
-    if (status === "Valid") seen.add(key);
-    return { key: i, data, status, message };
+    },
+    validate: (data) => validateClass(data, kind),
+    // An already listed name wins over a repeat; only valid rows count as seen.
+    classify: (data, valid) => {
+      if (!valid) return undefined;
+      if (existing.has(data.class_name.toLowerCase()))
+        return {
+          status: "Existing",
+          message: `A ${noun.one} with this name is already listed`,
+        };
+      const key = classKey(data);
+      if (seen.has(key))
+        return {
+          status: "Duplicate",
+          message: `Same ${noun.one}, section, day and start time as an earlier row`,
+        };
+      seen.add(key);
+      return undefined;
+    },
   });
-  if (!rows.length)
-    return {
-      rows,
-      error: `The file has a header row but no ${noun.many}.`,
-    };
-  return { rows };
 }
 
 /** Builds a table record in the shape of the page the class is added to. */
@@ -253,9 +195,6 @@ export function classRecord(
   previous?: DataRecord,
 ): DataRecord {
   const noun = NOUN[kind];
-  const id =
-    previous?.id ??
-    `NEW-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   const name = [c.class_name, c.section].filter(Boolean).join(" · ");
   const schedule = [
     c.day,
@@ -278,13 +217,12 @@ export function classRecord(
         source: c.room ? `${room} · camera not mapped` : "Not mapped",
         state: "Prepare",
       }
-    : page.id === "ca-class-coverage"
+    : /^(ca|va)-class-coverage$/.test(page.id)
       ? {
           space: c.room
             ? `${kind === "lab" ? "Lab" : "Room"} ${c.room} · ${c.class_name}`
             : c.class_name,
-          campus:
-            scope.find((value) => value !== "Across campuses") || scope[0],
+          campus: scope.find((value) => !isAggregateScope(value)) || scope[0],
           owner: c.department || "—",
           roster: "0 / 0",
           camera: "Not mapped",
@@ -301,57 +239,42 @@ export function classRecord(
           readiness: room,
           state: "Prepare",
         };
-  const cells = Object.fromEntries(
-    page.columns.map((col) => [col.id, byColumn[col.id] ?? "—"]),
-  );
-  if (previous && !previous.sessionCreated) {
+  const cells = cellsFor(page, byColumn);
+  const event = sessionEvent(source, actor);
+  if (previous && !previous.sessionCreated)
     // Editing a source row: update only what the form owns and keep its
     // status, measurements and detail. Status comes from the source services.
-    const owned = new Set([
-      "space",
-      "owner",
-      "class",
-      "path",
-      "lab",
-      ...(schedule || c.start_time ? ["session"] : []),
-      ...(c.capacity ? ["expected"] : []),
-    ]);
-    return {
-      ...previous,
+    return editSourceRecord(previous, {
+      page,
       setup: c,
       setupKind: kind,
-      cells: Object.fromEntries(
-        page.columns.map((col) => [
-          col.id,
-          owned.has(col.id) ? cells[col.id] : previous.cells[col.id],
-        ]),
-      ),
-      detail: {
-        ...previous.detail,
-        title: name,
-        sections: [
-          {
-            title: "Class / lab configuration",
-            description: "Configuration edited in this session",
-            items: TEMPLATE_COLUMNS.map((key) => ({
-              label: labelFor(key, kind),
-              value: c[key] || "—",
-            })),
-          },
-          ...previous.detail.sections.filter(
-            (section) => section.title !== "Class / lab configuration",
-          ),
-        ],
-        timeline: [
-          { time: "Just now", event: source, actor },
-          ...previous.detail.timeline,
-        ],
-      },
-    };
-  }
+      cells,
+      owned: [
+        "space",
+        "owner",
+        "class",
+        "path",
+        "lab",
+        ...(schedule || c.start_time ? ["session"] : []),
+        ...(c.capacity ? ["expected"] : []),
+      ],
+      title: name,
+      sections: [
+        {
+          title: "Class / lab configuration",
+          description: "Configuration edited in this session",
+          items: TEMPLATE_COLUMNS.map((key) => ({
+            label: labelFor(key, kind),
+            value: c[key] || "—",
+          })),
+        },
+      ],
+      sectionsFirst: true,
+      event,
+    });
   const tone: Tone = "pending";
   return {
-    id,
+    id: previous?.id ?? sessionId(),
     type: kind,
     sessionCreated: true,
     setup: c,
@@ -409,10 +332,7 @@ export function classRecord(
           ],
         },
       ],
-      timeline: [
-        { time: "Just now", event: source, actor },
-        ...(previous?.detail.timeline ?? []),
-      ],
+      timeline: [event, ...(previous?.detail.timeline ?? [])],
       permittedActions: [],
     },
   };
@@ -473,6 +393,7 @@ export function setupKinds(workspace: Workspace, pageId?: string): SetupKind[] {
   if (workspace.industry !== "education") return [];
   const pages: Record<string, Record<string, SetupKind[]>> = {
     customer_admin: { "ca-class-coverage": ["class", "lab"] },
+    vizenta_admin: { "va-class-coverage": ["class", "lab"] },
     dean: { "dean-classes": ["class"], "dean-labs": ["lab"] },
     coordinator: {
       "coordinator-classes": ["class"],

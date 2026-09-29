@@ -1,10 +1,9 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { useApp } from "../../../application/AppProvider";
 import { industries } from "../../../domain/contracts/registry";
 import { workspaceRoleLabel } from "../../../domain/contracts/experience";
 import type { PageContract, DataRecord } from "../../../domain/contracts/types";
-import { cellText } from "../../../domain/contracts/logic";
 import { useTheme } from "../../../shared/theme/Theme";
 import { Row, Txt, Button, Field, Card } from "../../../shared/ui/Primitives";
 import { Icon } from "../../../shared/ui/Icon";

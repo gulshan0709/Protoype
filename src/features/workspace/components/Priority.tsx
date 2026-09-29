@@ -17,7 +17,13 @@ import {
   toneColors,
   useTheme,
 } from "../../../shared/theme/Theme";
-import { Badge, Card, Row, Txt } from "../../../shared/ui/Primitives";
+import {
+  Badge,
+  Card,
+  LabeledValue,
+  Row,
+  Txt,
+} from "../../../shared/ui/Primitives";
 import { Icon } from "../../../shared/ui/Icon";
 import {
   PersonAvatar,
@@ -71,7 +77,7 @@ function Pill({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={({ pressed, hovered }: any) => ({
+      style={({ pressed, hovered }) => ({
         flexDirection: "row",
         alignItems: "center",
         gap: 10,
@@ -262,10 +268,11 @@ export function DecisionBar({
         }}
       >
         {facts.map((fact) => (
-          <View key={fact.label} style={{ minWidth: 110, gap: 3 }}>
-            <Txt size={11} color={c.muted}>
-              {fact.label}
-            </Txt>
+          <LabeledValue
+            key={fact.label}
+            label={fact.label}
+            style={{ minWidth: 110, gap: 3 }}
+          >
             <PersonOr
               text={fact.label === "Owner" ? fact.value : undefined}
               size={PERSON_INLINE}
@@ -274,7 +281,7 @@ export function DecisionBar({
                 {fact.value}
               </Txt>
             </PersonOr>
-          </View>
+          </LabeledValue>
         ))}
       </View>
       {!!children && <Row style={{ flexWrap: "wrap", gap: 8 }}>{children}</Row>}

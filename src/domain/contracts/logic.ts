@@ -6,12 +6,17 @@ import type {
   Action,
   Workspace,
 } from "./types";
-export function cellText(value: Cell | undefined): string {
-  if (value == null) return "—";
+import { toCsv } from "../common/csv";
+/** A cell as display text; `empty` when it has none. */
+export function cellTextOr(value: Cell | undefined, empty: string): string {
+  if (value == null) return empty;
   return typeof value === "object"
-    ? String(value.primary ?? value.label ?? value.value ?? "—")
+    ? String(value.primary ?? value.label ?? value.value ?? empty)
     : String(value);
 }
+/** A cell as display text, "—" when it has none. */
+export const cellText = (value: Cell | undefined): string =>
+  cellTextOr(value, "—");
 /** KPI detail facts; contracts without a window or calculation fall back. */
 export function metricFacts(metric: Metric, page: PageContract, scope: string) {
   return [
@@ -30,10 +35,38 @@ export function metricFacts(metric: Metric, page: PageContract, scope: string) {
 export function cellSecondary(value: Cell): string {
   return typeof value === "object" ? (value.secondary ?? value.meta ?? "") : "";
 }
+/** Scopes that cover every campus or customer rather than one place. */
+export const AGGREGATE_SCOPES: readonly string[] = [
+  "Across campuses",
+  "All customers",
+];
+export const isAggregateScope = (scope: string) =>
+  AGGREGATE_SCOPES.includes(scope);
+/** Scopes every record shares (the page-wide ones); a template's others are its own. */
+export const commonScopes = (records: readonly DataRecord[]) =>
+  records.map((r) => r.scope).reduce((a, b) => a.filter((s) => b.includes(s)));
 export function scopedRecords(page: PageContract, scope: string) {
   // Missing scope is denied, never interpreted as global access.
   return page.records.filter((record) => record.scope?.includes(scope));
 }
+// Status filter labels → the state tones they also match.
+const STATE_ALIASES: Record<string, string[]> = {
+  "Needs action": ["attention", "critical"],
+  "Needs review": ["attention"],
+  Review: ["attention"],
+  "Needs attention": ["attention"],
+  Current: ["healthy", "complete"],
+  Verified: ["healthy", "complete"],
+  Healthy: ["healthy"],
+  Ready: ["healthy"],
+  "Action required": ["critical"],
+  Critical: ["critical"],
+  Pending: ["pending"],
+  Complete: ["complete"],
+  "Source unavailable": ["unavailable"],
+  "Not configured": ["unavailable"],
+  "Coverage unknown": ["unavailable"],
+};
 export function filterRecords(
   records: DataRecord[],
   query: string,
@@ -50,29 +83,11 @@ export function filterRecords(
     if (query && !text.includes(query.trim().toLowerCase())) return false;
     return Object.entries(filters).every(([key, value]) => {
       if (!value || /^(all\b|across\b|current$)/i.test(value)) return true;
-      if (key === "state") {
-        const aliases: Record<string, string[]> = {
-          "Needs action": ["attention", "critical"],
-          "Needs review": ["attention"],
-          Review: ["attention"],
-          "Needs attention": ["attention"],
-          Current: ["healthy", "complete"],
-          Verified: ["healthy", "complete"],
-          Healthy: ["healthy"],
-          Ready: ["healthy"],
-          "Action required": ["critical"],
-          Critical: ["critical"],
-          Pending: ["pending"],
-          Complete: ["complete"],
-          "Source unavailable": ["unavailable"],
-          "Not configured": ["unavailable"],
-          "Coverage unknown": ["unavailable"],
-        };
+      if (key === "state")
         return (
           record.state.label.toLowerCase() === value.toLowerCase() ||
-          (aliases[value]?.includes(record.state.tone) ?? false)
+          (STATE_ALIASES[value]?.includes(record.state.tone) ?? false)
         );
-      }
       const cell = record.cells[key];
       return cell !== undefined
         ? cellText(cell).toLowerCase().includes(value.toLowerCase())
@@ -102,18 +117,12 @@ export function canAct(
   return record?.detail.permittedActions.find((a) => a.id === actionId);
 }
 export function csvFor(page: PageContract, rows: DataRecord[]) {
-  const quote = (value: string) =>
-    '"' +
-    (/^[=+\-@\t\r]/.test(value) ? "'" + value : value).replaceAll('"', '""') +
-    '"';
-  return [
+  return toCsv([
     ["Record ID", ...page.columns.map((c) => c.label), "Status"],
     ...rows.map((row) => [
       row.id,
       ...page.columns.map((c) => cellText(row.cells[c.id])),
       row.state.label,
     ]),
-  ]
-    .map((row) => row.map(quote).join(","))
-    .join("\r\n");
+  ]);
 }

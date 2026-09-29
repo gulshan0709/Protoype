@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from "react";
+import { createContext, useContext } from "react";
 export const light = {
   // Pure neutral foundations keep the interface crisp while semantic color
   // carries the product hierarchy.
@@ -101,7 +101,7 @@ export const dark: typeof light = {
   missionCombined: "#8f82ff",
   missionPlatform: "#a5bbcd",
 };
-export type Colors = typeof light;
+type Colors = typeof light;
 export type ThemeStyle = "signature" | "cobalt" | "teal";
 
 const styleTokens: Record<ThemeStyle, Partial<Colors>> = {

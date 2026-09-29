@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { authUseCases, type AuthUseCaseId } from "../model/authUseCases";
 import type { AuthShowcaseState } from "../hooks/useAuthShowcase";

@@ -1,4 +1,4 @@
-import type { Industry, DataRecord } from "./types";
+import type { Industry } from "./types";
 export function populateMediaDemo(education: Industry) {
   const seeded = education as Industry & { mediaDemoReady?: boolean };
   if (seeded.mediaDemoReady) return;

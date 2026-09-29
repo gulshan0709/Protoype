@@ -1,8 +1,13 @@
-import React, { useMemo, useState } from "react";
 import { View } from "react-native";
-import { useTheme } from "../../../shared/theme/Theme";
-import { Button, Field, Row, Txt } from "../../../shared/ui/Primitives";
-import { Select } from "../../../shared/ui/Select";
+import { Field } from "../../../shared/ui/Primitives";
+import {
+  FormActions,
+  FormCell,
+  FormGrid,
+  RequiredNote,
+  SelectField,
+} from "../../../shared/ui/Form";
+import { useFormState } from "../../../shared/ui/useFormState";
 import {
   emptyClass,
   validateClass,
@@ -18,17 +23,6 @@ import {
   type SetupKind,
 } from "../../../domain/classes/setup";
 
-function FormGrid({ children }: { children: React.ReactNode }) {
-  return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-      {children}
-    </View>
-  );
-}
-function Cell({ children }: { children: React.ReactNode }) {
-  return <View style={{ flexGrow: 1, flexBasis: 220 }}>{children}</View>;
-}
-
 export function AddClassForm({
   kind = "class",
   initial,
@@ -42,65 +36,55 @@ export function AddClassForm({
   onSave: (c: NewClass) => void;
   onCancel: () => void;
 }) {
-  const c = useTheme();
-  const [form, setForm] = useState<NewClass>(
+  // Editing shows what still needs completing straight away.
+  const {
+    value: form,
+    set,
+    err,
+    submit,
+  } = useFormState(
     initial ?? {
       ...emptyClass(),
       Tag: kind === "lab" ? "Lab" : "Lecture",
       attendance_type: kind === "lab" ? "Continuous" : "Snapshot",
     },
+    (f) => validateClass(f, kind),
+    { reveal: !!initial },
   );
-  // Editing shows what still needs completing straight away.
-  const [submitted, setSubmitted] = useState(!!initial);
-  const errors = useMemo(() => validateClass(form, kind), [form, kind]);
-  const set = (k: Column) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
   const text = (k: Column, placeholder?: string) => (
-    <Cell key={k}>
+    <FormCell key={k}>
       <Field
         label={`${labelFor(k, kind)}${REQUIRED.includes(k) ? " *" : ""}`}
         value={form[k]}
         onChange={set(k)}
         placeholder={placeholder}
-        error={submitted ? errors[k] : undefined}
+        error={err(k)}
       />
-    </Cell>
+    </FormCell>
   );
   const choice = (k: Column, options: string[]) => (
-    <Cell key={k}>
-      <View style={{ gap: 7 }}>
-        <Txt size={12} bold>
-          {LABELS[k]}
-          {REQUIRED.includes(k) ? " *" : ""}
-        </Txt>
-        <Select
-          label={LABELS[k]}
-          value={form[k]}
-          options={[
-            ...(REQUIRED.includes(k) ? [] : [{ label: "Not set", value: "" }]),
-            ...options.map((o) => ({ label: o, value: o })),
-          ]}
-          onChange={(v) => {
-            set(k)(v);
-            // Labs and practicals use continuous verification by default.
-            if (k === "Tag")
-              set("attendance_type")(
-                v === "Lab" || v === "Practical" ? "Continuous" : "Snapshot",
-              );
-          }}
-        />
-        {submitted && errors[k] && (
-          <Txt size={12} color={c.critical}>
-            {errors[k]}
-          </Txt>
-        )}
-      </View>
-    </Cell>
+    <FormCell key={k}>
+      <SelectField
+        label={LABELS[k]}
+        required={REQUIRED.includes(k)}
+        value={form[k]}
+        placeholder={REQUIRED.includes(k) ? undefined : "Not set"}
+        options={options}
+        onChange={(v) => {
+          set(k)(v);
+          // Labs and practicals use continuous verification by default.
+          if (k === "Tag")
+            set("attendance_type")(
+              v === "Lab" || v === "Practical" ? "Continuous" : "Snapshot",
+            );
+        }}
+        error={err(k)}
+      />
+    </FormCell>
   );
   return (
     <View style={{ gap: 16 }}>
-      <Txt size={12} color={c.muted}>
-        Fields marked * are required.
-      </Txt>
+      <RequiredNote />
       <FormGrid>
         {text(
           "class_name",
@@ -123,17 +107,11 @@ export function AddClassForm({
         {text("room", kind === "lab" ? "e.g. L-12" : "e.g. 204")}
         {kind === "lab" && text("capacity", "e.g. 30")}
       </FormGrid>
-      <Row style={{ justifyContent: "flex-end", gap: 8 }}>
-        <Button label="Cancel" onPress={onCancel} />
-        <Button
-          label={submitLabel ?? `Add ${NOUN[kind].one}`}
-          variant="primary"
-          onPress={() => {
-            setSubmitted(true);
-            if (!Object.keys(errors).length) onSave(form);
-          }}
-        />
-      </Row>
+      <FormActions
+        submitLabel={submitLabel ?? `Add ${NOUN[kind].one}`}
+        onCancel={onCancel}
+        onSubmit={submit(onSave)}
+      />
     </View>
   );
 }

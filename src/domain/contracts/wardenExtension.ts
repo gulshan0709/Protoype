@@ -1,8 +1,15 @@
-import type { Industry, PageContract } from "./types";
-type Rec = PageContract["records"][number];
+import type { DataRecord as Rec, Industry, PageContract } from "./types";
+import { str as text } from "../common/text";
+import { MONTHS } from "../common/time";
+import {
+  acrossCampuses,
+  EDUCATION_TENANT_SCOPE,
+  pageStates,
+  syncProductTabs,
+  textColumns,
+} from "./pageBuilders";
 export function wardenProduct(education: Industry) {
   const src = education.pages;
-  const text = (v: unknown) => (typeof v === "string" ? v : "");
   const hostels: Rec[] =
     src.customer_admin?.product.Hostel?.Hostels?.records ?? [];
   const leaves: Rec[] =
@@ -18,13 +25,11 @@ export function wardenProduct(education: Industry) {
         .filter((o) => /^Warden\s/.test(o)),
     ),
   ];
-  const states = (subject: string) => ({
-    empty: `No ${subject} match this scope and filter set.`,
-    degraded: "A source is degraded.",
-    notConfigured: "This view is not configured.",
-    unauthorized: "Your role does not permit this view.",
-    insufficientHistory: "There is not enough history yet.",
-  });
+  const states = (subject: string) =>
+    pageStates(subject, {
+      degraded: "A source is degraded.",
+      notConfigured: "This view is not configured.",
+    });
   const residentSources =
     src.customer_admin?.product.Hostel?.Rosters?.sources ?? [];
 
@@ -134,11 +139,7 @@ export function wardenProduct(education: Industry) {
         detailType,
         recordLabel,
         metrics: [],
-        columns: columns.map(([cid, label]) => ({
-          id: cid,
-          label,
-          type: "text",
-        })),
+        columns: textColumns(columns),
         filters,
         records,
         sidePanels: [],
@@ -224,45 +225,18 @@ export function wardenProduct(education: Industry) {
         "Warden",
       );
   };
-  add("customer_admin", "ca", (r) => [
-    // Campus-level scopes only; the campus-wide view lists every record.
-    "Across campuses",
-    ...(r
-      ? r.scope.filter(
-          (x) => x !== "Across campuses" && !x.startsWith("Hostel"),
-        )
-      : ["Residential Campus"]),
-  ]);
-  add("vizenta_admin", "va", () => ["All customers", "Northbridge Education"]);
-  for (const role of ["customer_admin", "vizenta_admin"]) {
-    education.core.productTabs[role] ??= {};
-    education.core.productTabs[role].Warden = Object.keys(
-      src[role].product.Warden,
-    );
-  }
-  const families = (
-    education.core as unknown as {
-      productFamilies: Record<string, { family: string; icon: string }>;
-    }
-  ).productFamilies;
+  // Campus-level scopes only; the campus-wide view lists every record.
+  add("customer_admin", "ca", (r) =>
+    r ? acrossCampuses(r.scope, true) : ["Across campuses", "Residential Campus"],
+  );
+  add("vizenta_admin", "va", () => [...EDUCATION_TENANT_SCOPE]);
+  for (const role of ["customer_admin", "vizenta_admin"])
+    syncProductTabs(education, role, "Warden");
+  const families = education.core.productFamilies;
   if (families && !families.Warden)
     families.Warden = { family: "Presence", icon: "users" };
 }
 
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
 /** "Sep 16–18" / "Sep 15 17:00–22:00" → ISO start and end dates (2026). */
 function leaveDates(window: string): [string, string] {
   const m = window.match(/^([A-Z][a-z]{2}) (\d{1,2})(?:–(\d{1,2})(?!:))?/);

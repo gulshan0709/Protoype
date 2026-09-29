@@ -17,6 +17,11 @@ const transitions: Record<string, Status> = {
 export function transitionFor(action: Action) {
   return transitions[action.id];
 }
+/** Same industry, role and scope: audit entries and local edits belong to one workspace. */
+export const sameWorkspace = (a: Workspace, b: Workspace) =>
+  a.industry === b.industry && a.role === b.role && a.scope === b.scope;
+// Facts and section items that show the record's status.
+const STATUS_LABEL = /^(status|state|lifecycle|current state)$/i;
 export function localRecord(
   record: DataRecord,
   pageId: string,
@@ -27,9 +32,7 @@ export function localRecord(
     (e) =>
       e.recordId === record.id &&
       e.pageId === pageId &&
-      e.workspace.industry === workspace.industry &&
-      e.workspace.role === workspace.role &&
-      e.workspace.scope === workspace.scope &&
+      sameWorkspace(e.workspace, workspace) &&
       e.actionId &&
       transitions[e.actionId],
   );
@@ -44,14 +47,14 @@ export function localRecord(
     detail: {
       ...record.detail,
       facts: record.detail.facts.map((f) =>
-        /^(status|state|lifecycle|current state)$/i.test(f.label)
+        STATUS_LABEL.test(f.label)
           ? { ...f, value: state.label }
           : f,
       ),
       sections: record.detail.sections.map((s) => ({
         ...s,
         items: s.items.map((item) =>
-          /^(status|state|lifecycle|current state)$/i.test(item.label)
+          STATUS_LABEL.test(item.label)
             ? { ...item, value: state.label, tone: state.tone }
             : item,
         ),

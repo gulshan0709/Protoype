@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { View, Pressable } from "react-native";
 import { industries } from "../../../domain/contracts/registry";
 import type { Workspace, IndustryId } from "../../../domain/contracts/types";

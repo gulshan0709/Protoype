@@ -27,7 +27,7 @@ import {
   type LockConfig,
 } from "./appLock";
 
-export type PinResult =
+type PinResult =
   { ok: true } | { ok: false; remaining: number; lockedUntil: number };
 interface AppLockContext {
   supported: boolean;

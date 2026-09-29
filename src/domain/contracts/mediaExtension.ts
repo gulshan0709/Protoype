@@ -21,7 +21,7 @@ export function mediaExplorer(education: Industry, now = new Date()) {
     Object.fromEntries(
       Object.entries(summaries).map(([scope, s]) => [scope, format(s)]),
     );
-  const all = mediaSummary(persona.scopes[0], now);
+  const all = summaries[persona.scopes[0]];
   const retention = `Last ${RETENTION_DAYS} days`;
   const page = {
     id: MEDIA_EXPLORER_PAGE,

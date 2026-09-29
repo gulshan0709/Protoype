@@ -1,17 +1,17 @@
-import React from "react";
+import { memo } from "react";
 import {
   View,
   Pressable,
   useWindowDimensions,
   type DimensionValue,
 } from "react-native";
-import { Metric } from "../../../domain/contracts/types";
+import type { Metric } from "../../../domain/contracts/types";
 import { useTheme } from "../../../shared/theme/Theme";
-import { Txt } from "../../../shared/ui/Primitives";
+import { Card, Txt } from "../../../shared/ui/Primitives";
 import { Icon } from "../../../shared/ui/Icon";
 import { primaryMetricIndex } from "../../../domain/contracts/priority";
 
-export function Metrics({
+export const Metrics = memo(function Metrics({
   metrics,
   scope,
   narrow,
@@ -57,16 +57,12 @@ export function Metrics({
     return { basis: 0, right: k < n - 1, bottom: false };
   };
   return (
-    <View
+    <Card
       style={{
         flexDirection: "row",
         flexWrap: "wrap",
-        borderWidth: 1,
-        borderColor: c.border,
-        borderRadius: 12,
-        backgroundColor: c.surface,
+        padding: 0,
         overflow: "hidden",
-        boxShadow: c.panelShadow,
       }}
     >
       {ordered.map((metric, i) => {
@@ -85,7 +81,7 @@ export function Metrics({
             accessibilityRole="button"
             accessibilityLabel={"Explore " + label}
             onPress={() => onPress(metric)}
-            style={({ pressed, hovered }: any) => ({
+            style={({ pressed, hovered }) => ({
               flexGrow: 1,
               flexBasis: layout.basis,
               minWidth: 0,
@@ -136,6 +132,6 @@ export function Metrics({
           </Pressable>
         );
       })}
-    </View>
+    </Card>
   );
-}
+});

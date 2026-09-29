@@ -16,8 +16,11 @@ The old `skillatracker-ui-demo` exposes Webpack Module Federation routes, a Redu
 | `src/application/AppProvider.tsx` | Device persistence, workspace identity, preferences, audit history, notifications, export adapter and theme wiring |
 | `src/features/workspace/` | Workspace composition, role navigation, list/detail/KPI flows, assistant, login, settings and action dialogs |
 | `src/domain/contracts/` | Typed functional contracts, industry registries, scope rules, filtering, CSV formatting and local lifecycle reducers |
+| `src/domain/common/` | Pure helpers the domain modules share: hashing, text, time, validation, CSV and bulk-upload reading |
+| `src/domain/{cameras,classes,learners,surveillance,residence,sources,gate,media}/` | Setup models, validation and record builders for each setup flow (no React Native imports, so node tests load them) |
+| `src/features/workspace/components/setup/` | What the setup dialogs share (scope picker, record menu, delete confirmation, CSV bulk upload, camera connection fields) and the Sources & Setup views |
 | `src/shared/theme/` | Light/dark semantic color roles and bundled typography references |
-| `src/shared/ui/` | Reusable controls, vector icon system, accessible dialog stack, selects, fields, badges, cards and empty states |
+| `src/shared/ui/` | Reusable controls (buttons, icon buttons, fields, the form kit in `Form.tsx`, selects, segmented controls, chips, tab bars, pagers), vector icon system, accessible dialog stack, badges, cards and empty states |
 | `scripts/import-contracts.cjs` | Reproducible migration from the local functional specification |
 | `tests/` and `scripts/verify-*.cjs` | Contract invariants, scope/lifecycle tests and browser validation |
 
@@ -48,6 +51,12 @@ The import script evaluates the supplied local data registries in isolated Node 
 The page response model includes heading, purpose, metrics, filters, keyed columns, scoped typed records, side panels, source health, states and declared actions. Scope-specific metric values are honored where supplied. Otherwise a KPI is an authored page-wide reference measure, not a sum of sample rows. Store/Warehouse variants switch on the location manager's assigned scope.
 
 The frontend retains aggregate context panels as authored. They are not treated as separate source records for mutation or export. Export uses exactly the currently filtered records and escapes CSV quoting and spreadsheet-formula prefixes.
+
+### Loading and shared domain modules
+
+`src/domain/contracts/registry.ts` builds each industry the first time it is read. `data/corpora.cjs` evaluates a corpus only when it is first loaded, so a session that stays in one industry never parses the others. Construction is derived from Manufacturing, and Healthcare from Corporate after its authored rows. A derived industry is built together with its source, before any page of the source is expanded, so the result matches building all six at start. `derivedIndustries.ts` rewrites only the role pages it keeps and remembers each distinct string's replacement.
+
+Helpers shared across modules live in `src/domain/common/`: `hash.ts` (the deterministic FNV-1a hashing every demo generator uses), `text.ts`, `time.ts` (the Sep 15 2026 09:45 demo snapshot and calendar helpers), `validation.ts`, `csv.ts` (reading and formula-guarded writing) and `upload.ts` (the bulk-upload reader behind the learner, surveillance-user and class uploads). `contracts/sessionRecords.ts` builds the records the setup forms create or edit, and `contracts/pageBuilders.ts` holds what the product extensions share. These modules are plain TypeScript without React Native imports, so the node tests load them through `scripts/lib/ts-hooks.cjs`.
 
 ## Local state and workflow semantics
 

@@ -1,4 +1,15 @@
-import type { Cell, DataRecord, Industry, IndustryId, PageContract, Tone } from "./types";
+import type { DataRecord, Industry, IndustryId, PageContract, Tone } from "./types";
+import { seededRandom as random } from "../common/hash";
+import {
+  INDIAN_FEMALE as indianFemale,
+  INDIAN_LAST as indianLast,
+  INDIAN_MALE as indianMale,
+  WESTERN_FEMALE as westernFemale,
+  WESTERN_LAST as westernLast,
+  WESTERN_MALE as westernMale,
+} from "../common/names";
+import { escapeRegExp } from "../common/text";
+import { cellText, commonScopes } from "./logic";
 
 /*
  * Demo volume: each reference page ships three to nine authored rows. For
@@ -12,33 +23,10 @@ import type { Cell, DataRecord, Industry, IndustryId, PageContract, Tone } from 
  */
 
 type Rng = () => number;
-function hash(text: string) {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-function random(text: string): Rng {
-  let a = hash(text);
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 function pick<T>(rng: Rng, list: readonly T[]): T {
   return list[Math.floor(rng() * list.length)];
 }
 
-const indianFemale = ["Aanya", "Aditi", "Ananya", "Anjali", "Asha", "Avni", "Diya", "Divya", "Gauri", "Ira", "Isha", "Ishita", "Kavya", "Kiara", "Meera", "Mira", "Naina", "Neha", "Nisha", "Pooja", "Priya", "Riya", "Saanvi", "Sana", "Shreya", "Sneha", "Tanvi", "Tara", "Trisha", "Anika", "Pallavi", "Ritika", "Sakshi", "Simran", "Swati", "Nandini", "Kriti", "Megha", "Kavita", "Anita", "Anaya", "Devika", "Lakshmi", "Radhika", "Shruti"];
-const indianMale = ["Aarav", "Aditya", "Akash", "Amit", "Arjun", "Aryan", "Dev", "Dhruv", "Harsh", "Ishaan", "Kabir", "Karan", "Krish", "Manav", "Nikhil", "Pranav", "Rahul", "Rohan", "Sahil", "Sameer", "Siddharth", "Varun", "Vihaan", "Vikram", "Yash", "Ayaan", "Rishi", "Kunal", "Tushar", "Nitin", "Rajat", "Gaurav", "Abhinav", "Ankit", "Mohit", "Ravi", "Arun", "Deepak", "Suresh", "Manish", "Sanjay", "Imran", "Farhan"];
-const indianLast = ["Sharma", "Verma", "Gupta", "Mehta", "Patel", "Shah", "Rao", "Nair", "Iyer", "Menon", "Reddy", "Das", "Sen", "Bose", "Joshi", "Kulkarni", "Deshpande", "Pillai", "Kapoor", "Malhotra", "Chopra", "Singh", "Chauhan", "Agarwal", "Bansal", "Saxena", "Mishra", "Pandey", "Tiwari", "Banerjee", "Chatterjee", "Ghosh", "Naidu", "Hegde", "Kamath", "Shetty", "Bhat", "Rathore", "Yadav", "Khanna", "Arora", "Sethi", "Dutta", "Krishnan", "Varghese", "Thomas", "Fernandes", "Khan", "Qureshi", "Siddiqui", "Desai", "Kumar", "Joseph"];
-const westernFemale = ["Maya", "Lena", "Lina", "Emma", "Olivia", "Sofia", "Grace", "Hannah", "Chloe", "Nora", "Ava", "Leah", "Zoe", "Ruby", "Claire", "Julia"];
-const westernMale = ["Owen", "Liam", "Noah", "Ethan", "Lucas", "Daniel", "Marcus", "Ryan", "Adam", "Caleb", "Nathan", "Julian", "Leo", "Miles", "Isaac", "Oscar"];
-const westernLast = ["Chen", "Brooks", "Ellis", "Carter", "Hughes", "Morgan", "Reed", "Foster", "Bennett", "Parker", "Hayes", "Kim", "Nguyen", "Lopez", "Walsh", "Turner"];
 const female = new Set([...indianFemale, ...westernFemale]);
 const western = new Set([...westernFemale, ...westernMale]);
 const firstNames = [...new Set([...indianFemale, ...indianMale, ...westernFemale, ...westernMale])];
@@ -82,7 +70,6 @@ const restore = (text: string, saved: string[]) =>
   saved.length
     ? text.replace(/[-]/g, (c) => saved[c.charCodeAt(0) - 0xe000])
     : text;
-const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const domains: Record<IndustryId, string> = {
   education: "northbridge.edu",
@@ -378,13 +365,6 @@ function weight(record: DataRecord, clones: number) {
   return (base * (record.state.label.includes("·") ? 0.35 : 1)) / (1 + clones * 0.6);
 }
 
-// Same as logic.cellText; kept local so node tests can load this module alone.
-function cellText(value: Cell | undefined): string {
-  if (value == null) return "—";
-  return typeof value === "object"
-    ? String(value.primary ?? value.label ?? value.value ?? "—")
-    : String(value);
-}
 /** What makes a row a different thing, ignoring when it happened. */
 function identity(page: PageContract, record: DataRecord, mode: (lead: string) => LeadMode) {
   const [lead, ...rest] = leadCells(page, record);
@@ -430,6 +410,11 @@ function categories(page: PageContract, authored: DataRecord[]) {
 }
 
 const expanded = new WeakSet<PageContract>();
+/** A page copied from an expanded page already has its rows; keep them. */
+export function keepDemoVolume(page: PageContract) {
+  expanded.add(page);
+  return page;
+}
 export function withDemoVolume(
   page: PageContract,
   industry: Industry,
@@ -456,9 +441,7 @@ export function withDemoVolume(
   const roleScopes = (industry.core.roles[role]?.scopes ?? []).filter(
     (s) => !variant || (variant === "store") === s.startsWith("Store "),
   );
-  const common = authored
-    .map((r) => r.scope)
-    .reduce((a, b) => a.filter((s) => b.includes(s)));
+  const common = commonScopes(authored);
   const protectedPhrases = new Set<string>();
   for (const f of page.filters)
     for (const o of f.options) {
@@ -470,7 +453,7 @@ export function withDemoVolume(
   for (const s of industry.core.roles[role]?.scopes ?? []) protectedPhrases.add(s);
   const phraseList = [...protectedPhrases].sort((a, b) => b.length - a.length);
   const phrases = phraseList.length
-    ? new RegExp(phraseList.map(escape).join("|"), "g")
+    ? new RegExp(phraseList.map(escapeRegExp).join("|"), "g")
     : undefined;
   const assets = [...new Set(authored.map((r) => r.captureAsset).filter((a) => a !== undefined))];
   const records = [...authored];

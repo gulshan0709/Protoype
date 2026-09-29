@@ -1,22 +1,6 @@
 import type { IndustryId } from "./types";
 import { canonicalRoleFor } from "./priority";
 
-export type SolutionId = "education" | "enterprise";
-
-const enterpriseTemplates: Exclude<IndustryId, "education">[] = [
-  "corporate",
-  "retail",
-  "manufacturing",
-  "construction",
-  "healthcare",
-];
-
-export const solutionFor = (industry: IndustryId): SolutionId =>
-  industry === "education" ? "education" : "enterprise";
-
-export const solutionLabel = (industry: IndustryId) =>
-  industry === "education" ? "Education" : "Enterprise";
-
 export const templateLabel = (industry: IndustryId) =>
   ({
     education: "Education",
@@ -26,9 +10,6 @@ export const templateLabel = (industry: IndustryId) =>
     construction: "Construction",
     healthcare: "Healthcare",
   })[industry];
-
-export const templatesFor = (solution: SolutionId): IndustryId[] =>
-  solution === "education" ? ["education"] : enterpriseTemplates;
 
 export const workspaceRoleLabel = (role: string, persona: string) => {
   const accessRole = canonicalRoleFor(role);

@@ -5,3 +5,9 @@
 Copied unchanged from `vizenta-ai-ui-main/src/assests`: `images/banner.png`, `images/Vizenta-W-1.png` (renamed `vizenta-white.png`), and `icons/google.png`, `icons/microsoft.png`.
 
 The universal authentication screens use the fields and flow of `src/Components/SignIn/index.jsx`, `SignUp.jsx`, and `ForgotPassword.jsx` from that project. Their visual design is new; `banner.png` is retained only as a reference and is not bundled. The workspace continues to use the Four Industry package theme.
+
+The login showcase draws JPEG copies of `surveillance-lobby-front.png` and `education-classroom-marked.png` (quality 3 in ffmpeg, about 90% smaller, same 1536 × 1024 size). The PNGs stay as the masters; `scripts/prepare-demo-captures.cjs` crops demo stills from them. Re-export the JPEGs after changing a master:
+
+```
+ffmpeg -i surveillance-lobby-front.png -q:v 3 surveillance-lobby-front.jpg
+```

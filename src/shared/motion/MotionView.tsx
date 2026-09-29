@@ -1,15 +1,16 @@
-import React from "react";
+import type { ReactNode } from "react";
 import { Animated, type StyleProp, type ViewStyle } from "react-native";
 import { useEntrance } from "./useEntrance";
 
-export const MotionView = React.memo(function MotionView({
+// Not memoised: it always receives new children, so a memo never skips.
+export function MotionView({
   sceneKey,
   children,
   style,
   testID,
 }: {
   sceneKey: string;
-  children: React.ReactNode;
+  children: ReactNode;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }) {
@@ -19,4 +20,4 @@ export const MotionView = React.memo(function MotionView({
       {children}
     </Animated.View>
   );
-});
+}

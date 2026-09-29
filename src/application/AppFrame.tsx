@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Platform, View } from "react-native";
 import { Stack } from "expo-router";
 import { useApp } from "./AppProvider";
@@ -17,6 +17,22 @@ export function AppFrame({ fontsReady }: { fontsReady: boolean }) {
     }
   }, [launch]);
   const finish = useCallback(() => setLaunch(false), []);
+  // The same Stack element on every render, so an app change that re-renders
+  // this frame does not re-render the navigator and all of its screens. Native
+  // freezes blurred screens (web: app/index.tsx).
+  const stack = useMemo(
+    () => (
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: "none",
+          contentStyle: { backgroundColor: theme.background },
+          freezeOnBlur: true,
+        }}
+      />
+    ),
+    [theme.background],
+  );
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <View
@@ -28,19 +44,9 @@ export function AppFrame({ fontsReady }: { fontsReady: boolean }) {
       >
         {/* Android measures text once. Screens laid out before Inter loads keep
             fallback-font widths, then clip their last word when Inter draws. */}
-        {fontsReady && (
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: "none",
-              contentStyle: { backgroundColor: theme.background },
-            }}
-          />
-        )}
+        {fontsReady && stack}
       </View>
-      {launch && (
-        <LaunchScreen ready={fontsReady && ready} onDone={finish} overlay />
-      )}
+      {launch && <LaunchScreen ready={fontsReady && ready} onDone={finish} />}
       {!launch && <WebRefresh />}
     </View>
   );

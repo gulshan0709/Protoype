@@ -1,6 +1,7 @@
-import type { Industry, DataRecord, PageContract } from "./types";
-const text = (value: unknown) => (typeof value === "string" ? value : "");
-const dash = "—";
+import type { Industry, DataRecord } from "./types";
+import { str as text } from "../common/text";
+import { firstNameGender } from "../../shared/people/personName";
+import { rosterLearner } from "../classes/attendance";
 function facts(record: DataRecord, items: { label: string; value: string }[]) {
   for (const item of items) {
     const current = record.detail.facts.find((f) => f.label === item.label);
@@ -9,18 +10,12 @@ function facts(record: DataRecord, items: { label: string; value: string }[]) {
   }
 }
 // Learner gender follows the first name, so the form agrees with the person's
-// portrait. These are the demo name pools (contracts/demoVolume.ts); names in
-// neither list ("Import row 882") get no gender. Kept local because node tests
-// load this module without an import resolver; tests/portraits.test.cjs checks
-// every learner against src/shared/people/personName.ts.
-const femaleFirst = new Set(
-  "Aanya Aditi Ananya Anjali Asha Avni Diya Divya Gauri Ira Isha Ishita Kavya Kiara Meera Mira Naina Neha Nisha Pooja Priya Riya Saanvi Sana Shreya Sneha Tanvi Tara Trisha Anika Pallavi Ritika Sakshi Simran Swati Nandini Kriti Megha Kavita Anita Anaya Devika Lakshmi Radhika Shruti Maya Lena Lina Emma Olivia Sofia Grace Hannah Chloe Nora Ava Leah Zoe Ruby Claire Julia".split(" "),
-);
-const maleFirst = new Set(
-  "Aarav Aditya Akash Amit Arjun Aryan Dev Dhruv Harsh Ishaan Kabir Karan Krish Manav Nikhil Pranav Rahul Rohan Sahil Sameer Siddharth Varun Vihaan Vikram Yash Ayaan Rishi Kunal Tushar Nitin Rajat Gaurav Abhinav Ankit Mohit Ravi Arun Deepak Suresh Manish Sanjay Imran Farhan Owen Liam Noah Ethan Lucas Daniel Marcus Ryan Adam Caleb Nathan Julian Leo Miles Isaac Oscar".split(" "),
-);
-const learnerGender = (first: string) =>
-  femaleFirst.has(first) ? "Female" : maleFirst.has(first) ? "Male" : "";
+// portrait; names without a known first name ("Import row 882") get none.
+const GENDER_LABEL = { woman: "Female", man: "Male" } as const;
+const learnerGender = (first: string) => {
+  const gender = firstNameGender(first);
+  return gender ? GENDER_LABEL[gender] : "";
+};
 function section(
   record: DataRecord,
   title: string,
@@ -295,38 +290,9 @@ export function populateDemoData(education: Industry) {
                 room: label.match(/Room\s+(\d+)/)?.[1] || String(204 + i),
                 capacity: String(Math.max(count, 30)),
               };
-              const first = [
-                "Aarav",
-                "Riya",
-                "Kabir",
-                "Ananya",
-                "Arjun",
-                "Priya",
-                "Neha",
-                "Dev",
-                "Meera",
-                "Rahul",
-                "Isha",
-                "Karan",
-              ];
-              const last = [
-                "Mehta",
-                "Sharma",
-                "Rao",
-                "Das",
-                "Nair",
-                "Sen",
-                "Patel",
-                "Gupta",
-              ];
-              r.demoLearners = Array.from({ length: count }, (_, j) => ({
-                uid: String(24031 + j),
-                name:
-                  first[j % first.length] +
-                  " " +
-                  last[(j + Math.floor(j / first.length)) % last.length],
-                email: "student." + (24031 + j) + "@example.com",
-              }));
+              r.demoLearners = Array.from({ length: count }, (_, j) =>
+                rosterLearner(j),
+              );
             }
           });
         }

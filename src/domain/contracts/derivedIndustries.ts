@@ -1,4 +1,5 @@
 import type { Industry, IndustryId, Persona } from "./types";
+import { escapeRegExp } from "../common/text";
 
 type RoleSpec = {
   id: string;
@@ -10,26 +11,45 @@ type RoleSpec = {
   replacements?: [string, string][];
 };
 
-const copy = <T,>(value: T): T => structuredClone(value);
+type Fix = (text: string) => string;
 
-function replaceDeep<T>(value: T, replacements: [string, string][]): T {
-  const ordered = [...replacements].sort((a, b) => b[0].length - a[0].length);
+/**
+ * One replacement pass: longest patterns first, each applied to the result of
+ * the one before. The corpora repeat a few thousand distinct strings hundreds
+ * of thousands of times, so each result is remembered.
+ */
+function replacer(pairs: [string, string][]): Fix {
+  const ordered = [...pairs].sort((a, b) => b[0].length - a[0].length);
+  // A text with none of the patterns stays as it is: no pass can change it.
+  const any = new RegExp(ordered.map(([from]) => escapeRegExp(from)).join("|"));
+  const memo = new Map<string, string>();
+  return (text) => {
+    let out = memo.get(text);
+    if (out === undefined) {
+      out = any.test(text)
+        ? ordered.reduce(
+            (t, [from, to]) => (t.includes(from) ? t.split(from).join(to) : t),
+            text,
+          )
+        : text;
+      memo.set(text, out);
+    }
+    return out;
+  };
+}
+const then =
+  (first: Fix, second: Fix): Fix =>
+  (text) =>
+    second(first(text));
+
+/** A deep copy with every string and object key passed through `fix`. */
+function mapDeep<T>(value: T, fix: Fix): T {
   const walk = (input: unknown): unknown => {
-    if (typeof input === "string")
-      return ordered.reduce(
-        (text, [from, to]) => text.split(from).join(to),
-        input,
-      );
+    if (typeof input === "string") return fix(input);
     if (Array.isArray(input)) return input.map(walk);
     if (input && typeof input === "object")
       return Object.fromEntries(
-        Object.entries(input).map(([key, entry]) => [
-          ordered.reduce(
-            (text, [from, to]) => text.split(from).join(to),
-            key,
-          ),
-          walk(entry),
-        ]),
+        Object.entries(input).map(([key, entry]) => [fix(key), walk(entry)]),
       );
     return input;
   };
@@ -39,26 +59,19 @@ function replaceDeep<T>(value: T, replacements: [string, string][]): T {
 function roleFrom(
   source: Industry,
   spec: RoleSpec,
-  industryReplacements: [string, string][],
+  industryFix: Fix,
 ): {
   persona: Persona;
   pages: Industry["pages"][string];
   productTabs: Record<string, string[]>;
 } {
-  let persona = replaceDeep(
-    copy(source.core.roles[spec.from]),
-    industryReplacements,
-  );
-  let pages = replaceDeep(copy(source.pages[spec.from]), industryReplacements);
-  let productTabs = replaceDeep(
-    copy(source.core.productTabs[spec.from] ?? {}),
-    industryReplacements,
-  );
-  if (spec.replacements?.length) {
-    persona = replaceDeep(persona, spec.replacements);
-    pages = replaceDeep(pages, spec.replacements);
-    productTabs = replaceDeep(productTabs, spec.replacements);
-  }
+  // The role's own replacements run after the industry's, as a second pass would.
+  const fix = spec.replacements?.length
+    ? then(industryFix, replacer(spec.replacements))
+    : industryFix;
+  const persona = mapDeep(source.core.roles[spec.from], fix);
+  const pages = mapDeep(source.pages[spec.from], fix);
+  const productTabs = mapDeep(source.core.productTabs[spec.from] ?? {}, fix);
   persona.label = spec.label;
   if (spec.scopes) persona.scopes = spec.scopes;
   if (spec.products) persona.products = spec.products;
@@ -82,7 +95,15 @@ function derive(
   replacements: [string, string][],
   roles: RoleSpec[],
 ): Industry {
-  const base = replaceDeep(copy(source), replacements);
+  const fix = replacer(replacements);
+  // Roles, tabs and pages are rebuilt per role below, so the source's pages
+  // (nearly all of its size) are not rewritten here.
+  const base = Object.fromEntries(
+    Object.entries(source).map(([key, value]) => [
+      fix(key),
+      key === "pages" ? {} : mapDeep(value, fix),
+    ]),
+  ) as unknown as Industry;
   const result: Industry = {
     ...base,
     id,
@@ -96,7 +117,7 @@ function derive(
     pages: {},
   };
   for (const spec of roles) {
-    const role = roleFrom(source, spec, replacements);
+    const role = roleFrom(source, spec, fix);
     result.core.roles[spec.id] = role.persona;
     result.core.productTabs[spec.id] = role.productTabs;
     result.pages[spec.id] = role.pages;

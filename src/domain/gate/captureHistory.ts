@@ -11,34 +11,26 @@
 import type { DataRecord } from "../contracts/types";
 import { cellText } from "../contracts/logic";
 import { userIdentity } from "../contracts/userIdentity";
+import { fmix32, fnv1a } from "../common/hash";
+import {
+  addDays,
+  DEMO_SNAPSHOT as SNAPSHOT,
+  hhmm as clock,
+  MONTHS,
+  pad,
+  WEEKDAYS_SHORT as DAYS,
+} from "../common/time";
 
 /** Record types whose captures open the gallery. Add a detailType to enable a page. */
-export const PERSON_GALLERY_TYPES: readonly string[] = ["gate_in_out"];
+const PERSON_GALLERY_TYPES: readonly string[] = ["gate_in_out"];
 export const personGalleryEnabled = (page?: { detailType?: string }) =>
   !!page && PERSON_GALLERY_TYPES.includes(page.detailType ?? "");
 
-// The demo snapshot (Tue 15 Sep 2026, 09:45), as in classes/attendance.ts and the corporate rows.
-export const SNAPSHOT = new Date(2026, 8, 15, 9, 45);
 /** How far back the gate keeps a person's captures. */
 export const RETENTION_DAYS = 30;
 /** Days read at a time; earlier days load on request. */
 export const PAGE_DAYS = 3;
 const GATES = ["Main Gate", "Gate 2", "Gate 3", "Gate 4"];
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export type Direction = "In" | "Out";
 export interface PersonCapture {
@@ -62,28 +54,13 @@ export interface PersonCapture {
   lowLight: boolean;
 }
 
-const hash = (text: string) => {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++)
-    h = Math.imul(h ^ text.charCodeAt(i), 16777619);
-  // Final mix, so keys that differ only in their last letter are unrelated.
-  h ^= h >>> 16;
-  h = Math.imul(h, 0x85ebca6b);
-  h ^= h >>> 13;
-  h = Math.imul(h, 0xc2b2ae35);
-  h ^= h >>> 16;
-  return h >>> 0;
-};
+// The final mix keeps keys that differ only in their last letter unrelated.
+const hash = (text: string) => fmix32(fnv1a(text));
 const unit = (text: string) => hash(text) / 4294967296;
-const pad = (n: number) => String(n).padStart(2, "0");
 const dayKey = (d: Date) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const dayLabel = (d: Date) =>
   `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
-const clock = (minutes: number) =>
-  `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
-const addDays = (d: Date, n: number) =>
-  new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 
 /**
  * The row's own capture: direction, gate and time. A time without a date is the

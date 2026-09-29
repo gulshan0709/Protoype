@@ -1,5 +1,4 @@
 import { userIdentity } from "../../../domain/contracts/userIdentity";
-import React from "react";
 import type { DataRecord } from "../../../domain/contracts/types";
 import { PersonChip, PERSON_ROW } from "./PersonChip";
 /** A record's primary identity in the standard person format. */

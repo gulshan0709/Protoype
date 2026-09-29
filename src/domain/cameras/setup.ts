@@ -1,5 +1,18 @@
 import type { DataRecord, PageContract, Workspace } from "../contracts/types";
+import { str } from "../common/text";
+import {
+  cellsFor,
+  editSourceRecord,
+  sessionEvent,
+  sessionId,
+} from "../contracts/sessionRecords";
 export type CameraVariant = "room" | "gate";
+/** Row types that are a camera configuration (class sources, gate cameras). */
+export const CAMERA_ROW_TYPES: readonly string[] = [
+  "camera",
+  "camera_source",
+  "gate_camera",
+];
 
 export interface CameraDevice {
   display_name: string;
@@ -73,6 +86,22 @@ const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const HOST =
   /^(?=.{1,253}$)[a-z\d]([a-z\d-]*[a-z\d])?(\.[a-z\d]([a-z\d-]*[a-z\d])?)*$/i;
 
+/**
+ * Network address checks shared by every camera form: digits-and-dots must be
+ * a real IPv4 address, anything else a host name; the port is 1–65535.
+ */
+export function endpointErrors(d: { ip: string; port: string }) {
+  const e: { ip?: string; port?: string } = {};
+  const ip = d.ip.trim();
+  if (!ip) e.ip = "IP address is required";
+  else if (/^[\d.]+$/.test(ip) ? !IPV4.test(ip) : !HOST.test(ip))
+    e.ip = "Enter an IPv4 address or host name";
+  if (!d.port.trim()) e.port = "Port is required";
+  else if (!/^\d+$/.test(d.port) || +d.port < 1 || +d.port > 65535)
+    e.port = "Port must be 1–65535";
+  return e;
+}
+
 export interface CameraErrors {
   building?: string;
   room_number?: string;
@@ -110,17 +139,7 @@ export function validateCamera(
     const de: Partial<Record<keyof CameraDevice, string>> = {};
     if (!d.display_name.trim()) de.display_name = "Display name is required";
     if (!d.camera_brand.trim()) de.camera_brand = "Camera brand is required";
-    if (!d.ip.trim()) de.ip = "IP address is required";
-    else if (
-      // Digits-and-dots must be a real IPv4 address, not a host name.
-      /^[\d.]+$/.test(d.ip.trim())
-        ? !IPV4.test(d.ip.trim())
-        : !HOST.test(d.ip.trim())
-    )
-      de.ip = "Enter an IPv4 address or host name";
-    if (!d.port.trim()) de.port = "Port is required";
-    else if (!/^\d+$/.test(d.port) || +d.port < 1 || +d.port > 65535)
-      de.port = "Port must be 1–65535";
+    Object.assign(de, endpointErrors(d));
     if (!d.camera_id.trim()) de.camera_id = "Camera ID is required";
     if (!d.user_name.trim()) de.user_name = "User name is required";
     if (!d.password) de.password = "Password is required";
@@ -183,44 +202,27 @@ export function cameraRecord(
           owner: actor,
           state: "Pending",
         };
-  const cells = Object.fromEntries(
-    page.columns.map((col) => [col.id, byColumn[col.id] ?? "—"]),
-  );
-  const event = { time: "Just now", event: source, actor };
+  const cells = cellsFor(page, byColumn);
+  const event = sessionEvent(source, actor);
   if (previous && !previous.sessionCreated) {
     // Editing a source row: update what the form owns, keep the health
     // signals (last event, lag, state), which come from the camera service.
     const configuration = cameraRecord(page, c, variant, scope, actor, source);
-    const owned = new Set(["source", "type", "mapped", "gate", "direction"]);
-    return {
-      ...previous,
+    return editSourceRecord(previous, {
+      page,
       setup: c,
       setupKind: "camera",
-      cells: Object.fromEntries(
-        page.columns.map((col) => [
-          col.id,
-          owned.has(col.id) ? cells[col.id] : previous.cells[col.id],
-        ]),
-      ),
-      detail: {
-        ...previous.detail,
-        title: names,
-        facts: configuration.detail.facts,
-        sections: [
-          ...previous.detail.sections.filter(
-            (section) => !["Processing", "Cameras"].includes(section.title),
-          ),
-          ...configuration.detail.sections,
-        ],
-        timeline: [event, ...previous.detail.timeline],
-      },
-    };
+      cells,
+      owned: ["source", "type", "mapped", "gate", "direction"],
+      title: names,
+      facts: configuration.detail.facts,
+      sections: configuration.detail.sections,
+      event,
+    });
   }
   const [locationA, locationB] = LOCATION_LABELS[variant];
   return {
-    id:
-      previous?.id ??
-      `NEW-CAM-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    id: previous?.id ?? sessionId("CAM"),
     sessionCreated: true,
     type: "camera",
     setup: c,
@@ -287,18 +289,17 @@ export function cameraFromRecord(
     return { ...s, cameras: s.cameras.map((d) => ({ ...d })) };
   }
   const form = emptyCamera(variant);
-  const text = (v: unknown) => (typeof v === "string" ? v : "");
-  form.cameras[0].display_name = text(record.cells.source);
+  form.cameras[0].display_name = str(record.cells.source);
   if (variant === "gate") {
     // "Main Gate · Lane 1"
-    const [gate, lane] = text(record.cells.gate).split(" · ");
+    const [gate, lane] = str(record.cells.gate).split(" · ");
     form.building = gate ?? "";
     form.room_number = (lane ?? "").replace(/^Lane\s*/i, "");
-    const dir = text(record.cells.direction);
+    const dir = str(record.cells.direction);
     if (DIRECTIONS.includes(dir)) form.attendance_type = dir;
   } else {
     // "Room 204" or "AI Systems Lab 2"
-    const mapped = text(record.cells.mapped);
+    const mapped = str(record.cells.mapped);
     const room = mapped.match(/^Room\s+(.+)$/i);
     form.room_number = room ? room[1] : mapped;
   }
@@ -309,7 +310,10 @@ export function cameraSetupVariant(
   w: Workspace,
   pageId?: string,
 ): CameraVariant | undefined {
-  if (w.industry !== "education" || w.role !== "customer_admin") return;
+  if (w.industry !== "education") return;
+  if (w.role === "vizenta_admin")
+    return pageId === "va-class-sources" ? "room" : undefined;
+  if (w.role !== "customer_admin") return;
   if (pageId === "ca-class-sources") return "room";
   if (pageId === "ca-gate-cameras") return "gate";
 }

@@ -3,7 +3,6 @@ import { Image, View } from "react-native";
 import Svg, {
   Path,
   Circle,
-  Rect,
   Defs,
   LinearGradient,
   Stop,
@@ -27,11 +26,13 @@ const paths: Record<string, string> = {
   users:
     "M3 21c0-8 12-8 12 0M16 14c3 0 5 3 5 7M16 3c5 0 5 8 0 8M6 7a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
   settings: "M3 6h8m4 0h6M3 12h3m4 0h11M3 18h11m4 0h3M11 3v6M6 9v6m8 0v6",
+  columns: "M3 4h18v16H3ZM9 4v16M15 4v16",
   site: "M12 22S4 14 4 9a8 8 0 0 1 16 0c0 5-8 13-8 13ZM9 9a3 3 0 1 0 6 0 3 3 0 0 0-6 0",
   bell: "M18 8a6 6 0 0 0-12 0c0 6-3 7-3 9h18c0-2-3-3-3-9M10 21h4",
   help: "M9 9c0-4 7-4 6 0 0 2-3 2-3 5M12 17v1",
   search: "M21 21l-6-6M3 9a6 6 0 1 0 12 0A6 6 0 0 0 3 9",
   chevron: "m9 5 7 7-7 7",
+  left: "m15 5-7 7 7 7",
   down: "m6 9 6 6 6-6",
   arrow: "M4 12h16m-6-6 6 6-6 6",
   back: "M20 12H4m6-6-6 6 6 6",
@@ -84,7 +85,7 @@ export const Icon = React.memo(function Icon({
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {["help", "clock"].includes(name) && <Circle cx={12} cy={12} r={9} />}{" "}
+      {["help", "clock"].includes(name) && <Circle cx={12} cy={12} r={9} />}
       {name === "sun" && <Circle cx={12} cy={12} r={4} />}
       <Path d={paths[name] ?? paths.folder} />
     </Svg>

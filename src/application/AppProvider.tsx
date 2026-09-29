@@ -45,7 +45,6 @@ const initial: Saved = {
 const key = "vizenta-ai-demo-v1";
 interface AppContext extends Saved {
   ready: boolean;
-  toast: string;
   update: (patch: Partial<Saved>) => void;
   setColumnPreference: (key: string, ids: string[]) => void;
   notify: (text: string) => void;
@@ -55,7 +54,12 @@ interface AppContext extends Saved {
   exportRows: (page: PageContract, rows: DataRecord[]) => Promise<void>;
 }
 const Context = createContext<AppContext>(null!);
+// The toast has its own context: a message coming and going re-renders only
+// the banner, not every screen that reads the app state.
+const ToastContext = createContext("");
 export const useApp = () => useContext(Context);
+/** The toast message on screen ("" when none); `notify` in useApp sets it. */
+export const useToast = () => useContext(ToastContext);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [saved, setSaved] = useState(initial);
   const [ready, setReady] = useState(false);
@@ -172,26 +176,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     () => ({
       ...saved,
       ready,
-      toast,
       update,
       setColumnPreference,
       notify: setToast,
       addAudit,
       exportRows,
     }),
-    [saved, ready, toast, update, setColumnPreference, addAudit, exportRows],
+    [saved, ready, update, setColumnPreference, addAudit, exportRows],
   );
   const resolved = saved.theme === "system" ? system : saved.theme;
+  const mode = resolved === "dark" ? "dark" : "light";
+  const theme = useMemo(
+    () => themeFor(saved.themeStyle, mode),
+    [saved.themeStyle, mode],
+  );
   return (
     <Context.Provider value={value}>
-      <ThemeContext.Provider
-        value={themeFor(
-          saved.themeStyle,
-          resolved === "dark" ? "dark" : "light",
-        )}
-      >
-        {children}
-      </ThemeContext.Provider>
+      <ToastContext.Provider value={toast}>
+        <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>
+      </ToastContext.Provider>
     </Context.Provider>
   );
 }

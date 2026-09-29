@@ -1,4 +1,3 @@
-import React from "react";
 import { useTheme } from "../shared/theme/Theme";
 
 /** Web-only SVG/CSS keeps drag feedback and loading motion off the JS thread. */

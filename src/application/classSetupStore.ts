@@ -1,6 +1,12 @@
 import { useSyncExternalStore } from "react";
-import type { DataRecord } from "../domain/contracts/types";
+import type { DataRecord, Workspace } from "../domain/contracts/types";
 import type { Learner } from "../domain/classes/setup";
+
+/** Store key for one page's session changes (page ids repeat across industries and roles). */
+export const setupStoreKey = (
+  workspace: Pick<Workspace, "industry" | "role">,
+  pageId?: string,
+) => JSON.stringify([workspace.industry, workspace.role, pageId]);
 
 // Session changes to class and lab pages, keyed by industry, role and page. Kept outside any
 // screen because every navigation mounts a new screen instance (list →
@@ -65,6 +71,15 @@ export function storeDeletedRecord(pageId: string, id: string) {
       [pageId]: [...(setupState.deleted[pageId] ?? []), id],
     },
   });
+}
+/** Saves what a setup dialog built: an edit replaces its one record, new records go first. */
+export function storeSetupRecords(
+  pageId: string,
+  records: DataRecord[],
+  editing: boolean,
+) {
+  if (editing) storeEditedRecord(pageId, records[0]);
+  else storeAddedClasses(pageId, records);
 }
 export function storeLearners(key: string, list: Learner[]) {
   update({ learners: { ...setupState.learners, [key]: list } });

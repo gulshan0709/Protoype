@@ -1,43 +1,15 @@
-import { SourcesSetupDialog } from "./components/SourcesSetupDialog";
-import { SetupView, CriteriaView, DashboardView } from "./components/SetupTabs";
-import { ResidenceSetupDialog } from "./components/ResidenceSetupDialog";
-import {
-  wardenMetrics,
-  hostelMetrics,
-  leaveMetrics,
-  leaveEditable,
-} from "./components/WardenSetup";
-import {
-  attendanceMetrics,
-  inOutMetrics,
-  absentRowsFromUsers,
-  markedRecord,
-} from "../../domain/gate/attendance";
-import { MarkAttendanceForm } from "./components/MarkAttendanceForm";
-import { storeEditedRecord } from "../../application/classSetupStore";
-import {
-  surveillanceEnabled,
-  userMetrics,
-} from "../../domain/surveillance/setup";
-import { SurveillanceUserDialog } from "./components/SurveillanceUserDialog";
-import { cameraSetupVariant } from "../../domain/cameras/setup";
-import { CameraSetupDialog } from "./components/CameraSetupDialog";
-import { learnerSetupEnabled } from "../../domain/learners/setup";
-import { LearnerSetupDialog } from "./components/LearnerSetupDialog";
-import { MediaExplorer } from "./components/MediaExplorer";
-import { MEDIA_EXPLORER_PAGE } from "../../domain/contracts/mediaExtension";
-import React, {
-  useState,
-  useMemo,
-  useEffect,
-  useCallback,
-  useRef,
-} from "react";
-import { View, ScrollView, Pressable, useWindowDimensions } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { View, ScrollView, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "../../application/AppProvider";
+import { ToastBanner } from "../../application/ToastBanner";
+import {
+  setupStoreKey,
+  storeEditedRecord,
+  useSetupState,
+} from "../../application/classSetupStore";
 import {
   industries,
   homeLocation,
@@ -46,11 +18,9 @@ import {
   visibleProducts,
 } from "../../domain/contracts/registry";
 import {
-  scopedRecords,
   filterRecords,
   actionKind,
   cellText,
-  metricFacts,
 } from "../../domain/contracts/logic";
 import {
   actionQueue,
@@ -61,63 +31,73 @@ import {
   queueItems,
   showHomeMetric,
 } from "../../domain/contracts/priority";
-import { localRecord } from "../../domain/contracts/lifecycle";
 import { pageDescription } from "../../domain/contracts/experience";
+import { MEDIA_EXPLORER_PAGE } from "../../domain/contracts/mediaExtension";
 import type {
   Location,
   DataRecord,
   Action,
-  Workspace,
+  Metric,
 } from "../../domain/contracts/types";
+import { markedRecord } from "../../domain/gate/attendance";
 import { missionColor, useTheme } from "../../shared/theme/Theme";
-import {
-  Button,
-  IconButton,
-  Txt,
-  Row,
-  Card,
-  Field,
-  Badge,
-  EmptyState,
-  SectionTitle,
-} from "../../shared/ui/Primitives";
-import { BrandMark, Icon } from "../../shared/ui/Icon";
+import { Button, Txt, Row, EmptyState } from "../../shared/ui/Primitives";
 import { Dialog } from "../../shared/ui/Dialog";
-import { Select } from "../../shared/ui/Select";
+import { TabBar } from "../../shared/ui/TabBar";
+import { SetupView, CriteriaView, DashboardView } from "./components/SetupTabs";
+import { MarkAttendanceForm } from "./components/MarkAttendanceForm";
+import type { SetupRequest } from "./components/setup/types";
+import { MediaExplorer } from "./components/MediaExplorer";
 import { Navigation } from "./components/Navigation";
 import { Metrics } from "./components/Metrics";
 import { Records } from "./components/Records";
 import { ContextPanels } from "./components/ContextPanels";
-import { MissionBoard, MissionLabel } from "./components/Priority";
+import { MissionBoard } from "./components/Priority";
 import { RecordDetail } from "./components/RecordDetail";
 import { WorkspacePicker } from "./components/WorkspacePicker";
 import { Assistant } from "./components/Assistant";
-import { PersonAvatar, PersonOr, personIn } from "./components/PersonChip";
 import { ActionFlow } from "./components/ActionFlow";
 import { Settings } from "./components/Settings";
 import { Login } from "./components/Login";
-import { LaunchScreen } from "../../shared/ui/LaunchScreen";
-import { applySetup, useSetupState } from "../../application/classSetupStore";
-import { kindOf, setupKinds } from "../../domain/classes/setup";
+import { WorkspaceHeader } from "./components/WorkspaceHeader";
 import {
-  ClassSetupDialog,
-  type ClassSetupRequest,
-} from "./components/ClassSetupDialog";
+  AssistantDock,
+  BottomNav,
+  PhoneHeading,
+} from "./components/WorkspaceChrome";
+import { MetricDetail } from "./components/MetricDetail";
+import { SetupActions, rowActionsFor } from "./components/SetupActions";
+import {
+  PageNotices,
+  UnavailableState,
+  UserDirectoryPicker,
+} from "./components/PageSections";
+import { pageMetrics, pageRows, pageSetup, setupTabRows } from "./pageSetup";
+import {
+  DIALOG_TITLES,
+  AppsPanel,
+  ExportPanel,
+  HelpPanel,
+  NotificationsPanel,
+  SearchPanel,
+  useUpdates,
+  type SearchHit,
+} from "./components/WorkspaceDialogs";
 
-const titles: Record<string, string> = {
-  workspace: "Your workspaces",
-  assistant: "Ask Vizenta",
-  settings: "Settings & preferences",
-  notifications: "Your updates",
-  help: "How can we help?",
-  apps: "Your applications",
-  search: "Search your workspace",
-  export: "Export records",
-  action: "Review action",
-  menu: "Explore workspace",
-};
+/**
+ * The session gate: login until signed in, then the workspace. While the saved
+ * state loads, AppFrame's launch screen covers everything, so nothing renders.
+ */
 export default function WorkspaceScreen() {
   const app = useApp();
+  if (!app.ready) return null;
+  if (!app.session) return <Login />;
+  return <Workspace />;
+}
+
+function Workspace() {
+  const app = useApp();
+  const { workspace } = app;
   const c = useTheme();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -139,26 +119,39 @@ export default function WorkspaceScreen() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [search, setSearch] = useState("");
+  // Search keeps its query while the dialog is closed.
+  const lastSearch = useRef("");
   const [preview, setPreview] = useState("populated");
   const [action, setAction] = useState<Action>();
   const [exportRecord, setExportRecord] = useState<DataRecord>();
-  const [classSetup, setClassSetup] = useState<ClassSetupRequest>();
+  const [classSetup, setClassSetup] = useState<SetupRequest>();
+  const [markingId, setMarkingId] = useState<string>();
   const setupState = useSetupState();
   const scroll = useRef<ScrollView>(null);
-  const industry = industries[app.workspace.industry];
-  const role = industry.core.roles[app.workspace.role];
-  const mission = missionFor(app.workspace.industry, app.workspace.role);
-  const roleName = canonicalRoleFor(app.workspace.role);
-  const location: Location = params.name
-    ? {
-        type: params.type === "product" ? "product" : "org",
-        name: params.name,
-        tab: params.tab ?? "",
-        record: params.record,
-        metric: params.metric,
-      }
-    : homeLocation(app.workspace);
+  const industry = industries[workspace.industry];
+  const role = industry.core.roles[workspace.role];
+  const mission = missionFor(workspace.industry, workspace.role);
+  const roleName = canonicalRoleFor(workspace.role);
+  const location = useMemo(
+    (): Location =>
+      params.name
+        ? {
+            type: params.type === "product" ? "product" : "org",
+            name: params.name,
+            tab: params.tab ?? "",
+            record: params.record,
+            metric: params.metric,
+          }
+        : homeLocation(workspace),
+    [
+      params.type,
+      params.name,
+      params.tab,
+      params.record,
+      params.metric,
+      workspace,
+    ],
+  );
   const productFamily = industry.core.productFamilies[location.name]?.family;
   const headerAccent =
     productFamily === "Safety"
@@ -167,171 +160,116 @@ export default function WorkspaceScreen() {
         ? c.missionCombined
         : c.link;
   const peopleUsers =
-    app.workspace.industry === "education" &&
+    workspace.industry === "education" &&
     location.type === "org" &&
     location.name === "People & Access" &&
     location.tab === "Users" &&
-    ["customer_admin", "vizenta_admin"].includes(app.workspace.role);
-  const userPages = industry.pages[app.workspace.role];
-  const peopleGroups = [
-    {
-      value: "learners",
-      label: "Learners",
-      page: userPages?.product["Class & Lab Attendance"]?.Learners,
-    },
-    {
-      value: "surveillance",
-      label: "Surveillance users",
-      page: userPages?.org["Surveillance Users"]?.Users,
-    },
-    {
-      value: "accounts",
-      label: "Workspace users",
-      page: getPage(app.workspace, location),
-    },
-  ].filter((group) => !!group.page);
+    ["customer_admin", "vizenta_admin"].includes(workspace.role);
+  const userPages = industry.pages[workspace.role];
+  const peopleGroups = useMemo(
+    () =>
+      [
+        {
+          value: "learners",
+          label: "Learners",
+          page: userPages?.product["Class & Lab Attendance"]?.Learners,
+        },
+        {
+          value: "surveillance",
+          label: "Surveillance users",
+          page: userPages?.org["Surveillance Users"]?.Users,
+        },
+        {
+          value: "accounts",
+          label: "Workspace users",
+          page: getPage(workspace, location),
+        },
+      ].filter((group) => !!group.page),
+    [userPages, workspace, location],
+  );
   const selectedPeopleGroup =
     peopleGroups.find((group) => group.value === params.userGroup) ??
     peopleGroups[0];
   const sourcePage = peopleUsers
     ? selectedPeopleGroup?.page
-    : getPage(app.workspace, location);
-  const page =
-    peopleUsers && sourcePage
-      ? {
-          ...sourcePage,
-          columns: sourcePage.columns.map((column, index) =>
-            index === 0 ? { ...column, label: "User" } : column,
-          ),
-        }
-      : sourcePage;
-  const branch = getBranch(app.workspace, location.type, location.name);
-  const learnerManagement = learnerSetupEnabled(app.workspace, page?.id);
-  const cameraManagement = !!cameraSetupVariant(app.workspace, page?.id);
-  const surveillanceManagement = surveillanceEnabled(app.workspace, page?.id);
-  const residenceManagement =
-    app.workspace.industry === "education" &&
-    ["customer_admin", "vizenta_admin"].includes(app.workspace.role) &&
-    /^(ca|va)-warden-(wardens|hostels|leaves)$/.test(page?.id ?? "");
-  const sourcesManagement =
-    app.workspace.industry === "education" &&
-    app.workspace.role === "customer_admin" &&
-    ["ca-setup-cameras", "ca-setup-shifts"].includes(page?.id ?? "");
-  const SetupDialog = sourcesManagement
-    ? SourcesSetupDialog
-    : residenceManagement
-      ? ResidenceSetupDialog
-      : surveillanceManagement
-        ? SurveillanceUserDialog
-        : cameraManagement
-          ? CameraSetupDialog
-          : learnerManagement
-            ? LearnerSetupDialog
-            : ClassSetupDialog;
-  const classKinds =
-    learnerManagement ||
-    cameraManagement ||
-    surveillanceManagement ||
-    residenceManagement ||
-    sourcesManagement
-      ? ["class" as const]
-      : setupKinds(app.workspace, page?.id);
-  const classStoreKey = JSON.stringify([
-    app.workspace.industry,
-    app.workspace.role,
-    page?.id,
-  ]);
-  const [markingId, setMarkingId] = useState<string>();
-  const gateAttendancePage = page?.detailType === "gate_attendance";
-  const surveillancePage =
-    industry.pages[app.workspace.role]?.org["Surveillance Users"]?.Users;
-  const attendanceUsers =
-    gateAttendancePage && surveillancePage
-      ? applySetup(
-          setupState,
-          JSON.stringify([
-            app.workspace.industry,
-            app.workspace.role,
-            surveillancePage.id,
-          ]),
-          app.workspace.scope,
-          scopedRecords(surveillancePage, app.workspace.scope),
-        )
-      : [];
-  const rows = useMemo(
+    : getPage(workspace, location);
+  // One object per directory, so the rows below stay memoised.
+  const page = useMemo(
     () =>
-      page
-        ? applySetup(setupState, classStoreKey, app.workspace.scope, [
-            ...scopedRecords(page, app.workspace.scope),
-            ...(gateAttendancePage
-              ? absentRowsFromUsers(page, attendanceUsers)
-              : []),
-          ]).map((r) => {
-            const record = localRecord(r, page.id, app.workspace, app.audit);
-            return record;
-          })
-        : [],
-    [page, app.workspace, app.audit, setupState, classStoreKey],
+      peopleUsers && sourcePage
+        ? {
+            ...sourcePage,
+            columns: sourcePage.columns.map((column, index) =>
+              index === 0 ? { ...column, label: "User" } : column,
+            ),
+          }
+        : sourcePage,
+    [peopleUsers, sourcePage],
   );
-  const sourceTabRows = (tab: string) => {
-    const p =
-      industry.pages[app.workspace.role]?.org["Sources & Setup"]?.[tab] ??
-      industry.pages[app.workspace.role]?.product.Shield?.[tab];
-    return p
-      ? applySetup(
-          setupState,
-          JSON.stringify([app.workspace.industry, app.workspace.role, p.id]),
-          app.workspace.scope,
-          scopedRecords(p, app.workspace.scope),
-        )
-      : [];
-  };
+  const branch = getBranch(workspace, location.type, location.name);
+  const setup = useMemo(
+    () => pageSetup(workspace, page, location),
+    [workspace, page, location],
+  );
+  const SetupDialog = setup.Dialog;
+  const classStoreKey = setupStoreKey(workspace, page?.id);
+  const gateAttendancePage = page?.detailType === "gate_attendance";
+  const rows = useMemo(
+    () => (page ? pageRows(page, workspace, app.audit, setupState) : []),
+    [page, workspace, app.audit, setupState],
+  );
   const filtered = useMemo(
     () => filterRecords(rows, query, filters),
     [rows, query, filters],
   );
   const record = rows.find((r) => r.id === location.record);
-  const pageMetrics = residenceManagement
-    ? page?.detailType === "warden"
-      ? wardenMetrics(rows)
-      : page?.detailType === "hostel"
-        ? hostelMetrics(rows)
-        : leaveMetrics(rows)
-    : surveillanceManagement
-      ? userMetrics(rows)
-      : gateAttendancePage
-        ? attendanceMetrics(rows)
-        : page?.detailType === "gate_in_out"
-          ? inOutMetrics(rows)
-          : page?.metrics;
-  const metric = pageMetrics?.find((m) => m.label === location.metric);
+  const kpis = useMemo(
+    () => pageMetrics(page, rows, setup),
+    [page, rows, setup],
+  );
+  const metric = kpis?.find((m) => m.label === location.metric);
   const home =
     location.type === "org" &&
     location.name === role.home &&
     !record &&
     !metric;
-  const availableMetrics = pageMetrics ?? page?.metrics ?? [];
-  const shownMetrics = home
-    ? availableMetrics.filter((m) =>
-        showHomeMetric(
-          m.label,
-          m.valuesByScope?.[app.workspace.scope] ?? m.value,
-        ),
-      )
-    : availableMetrics;
+  const shownMetrics = useMemo(() => {
+    const available = kpis ?? [];
+    return home
+      ? available.filter((m) =>
+          showHomeMetric(
+            m.label,
+            m.valuesByScope?.[workspace.scope] ?? m.value,
+          ),
+        )
+      : available;
+  }, [kpis, home, workspace.scope]);
+  // Other review states keep the KPI tiles but show no values.
+  const metricTiles = useMemo(
+    () =>
+      preview === "populated"
+        ? shownMetrics
+        : shownMetrics.map((m) => ({
+            ...m,
+            value: "—",
+            valuesByScope: undefined,
+            contextsByScope: undefined,
+            context: "Unavailable in this review state",
+            tone: "unavailable" as const,
+          })),
+    [preview, shownMetrics],
+  );
   const pageTitle = metric
-    ? homeMetricLabel(app.workspace.role, metric.label)
+    ? homeMetricLabel(workspace.role, metric.label)
     : home
       ? role.home
       : location.name;
   const pageSubtitle = metric
-    ? `Metric detail · ${roleName} · ${app.workspace.scope}`
+    ? `Metric detail · ${roleName} · ${workspace.scope}`
     : home
-      ? [roleName, app.workspace.scope, page?.window]
-          .filter(Boolean)
-          .join(" · ")
+      ? [roleName, workspace.scope, page?.window].filter(Boolean).join(" · ")
       : pageDescription(
-          app.workspace.industry,
+          workspace.industry,
           location.type,
           location.name,
           page?.description,
@@ -354,59 +292,90 @@ export default function WorkspaceScreen() {
     },
     [openAssistant],
   );
-  const go = (next: Location, replace = false) => {
-    const href = {
-      pathname: "/" as const,
-      params: {
-        type: next.type,
-        name: next.name,
-        tab: next.tab,
-        ...(peopleUsers &&
-        next.name === "People & Access" &&
-        next.tab === "Users"
-          ? { userGroup: selectedPeopleGroup.value }
-          : {}),
-        ...(next.record ? { record: next.record } : {}),
-        ...(next.metric ? { metric: next.metric } : {}),
-      },
-    };
-    replace ? router.replace(href) : router.push(href);
-    scroll.current?.scrollTo({ y: 0, animated: false });
-  };
-  const navigate = (type: "org" | "product", name: string) => {
-    const b = getBranch(app.workspace, type, name);
-    if (!b) return;
-    go({ type, name, tab: Object.keys(b)[0] });
-    close();
-  };
-  const openRecord = (r: DataRecord) => {
-    go({ ...location, record: r.id, metric: undefined });
-    close();
-  };
+  const peopleGroup = peopleUsers ? selectedPeopleGroup.value : undefined;
+  const go = useCallback(
+    (next: Location, replace = false) => {
+      const href = {
+        pathname: "/" as const,
+        params: {
+          type: next.type,
+          name: next.name,
+          tab: next.tab,
+          ...(peopleGroup &&
+          next.name === "People & Access" &&
+          next.tab === "Users"
+            ? { userGroup: peopleGroup }
+            : {}),
+          ...(next.record ? { record: next.record } : {}),
+          ...(next.metric ? { metric: next.metric } : {}),
+        },
+      };
+      replace ? router.replace(href) : router.push(href);
+      scroll.current?.scrollTo({ y: 0, animated: false });
+    },
+    [peopleGroup, router],
+  );
+  const navigate = useCallback(
+    (type: "org" | "product", name: string) => {
+      const b = getBranch(workspace, type, name);
+      if (!b) return;
+      go({ type, name, tab: Object.keys(b)[0] });
+      close();
+    },
+    [workspace, go, close],
+  );
+  const openRecord = useCallback(
+    (r: DataRecord) => {
+      go({ ...location, record: r.id, metric: undefined });
+      close();
+    },
+    [go, location, close],
+  );
+  const openMetric = useCallback(
+    (m: Metric) => go({ ...location, metric: m.label }),
+    [go, location],
+  );
   const back = () => {
     if (router.canGoBack()) router.back();
     else go({ ...location, record: undefined, metric: undefined }, true);
   };
-  const switchWorkspace = (w: Workspace) => {
+  const switchWorkspace = (w: typeof workspace) => {
     app.update({ workspace: w });
     go(homeLocation(w), true);
     setPreview("populated");
     close();
   };
-  const changeScope = (scope: string) => {
-    const w = { ...app.workspace, scope };
-    app.update({ workspace: w });
-    if (
-      location.type === "product" &&
-      !visibleProducts(w).includes(location.name)
-    )
-      go(homeLocation(w), true);
-    else go({ ...location, record: undefined, metric: undefined }, true);
-  };
-  const clear = () => {
+  const { update } = app;
+  const changeScope = useCallback(
+    (scope: string) => {
+      const w = { ...workspace, scope };
+      update({ workspace: w });
+      if (
+        location.type === "product" &&
+        !visibleProducts(w).includes(location.name)
+      )
+        go(homeLocation(w), true);
+      else go({ ...location, record: undefined, metric: undefined }, true);
+    },
+    [workspace, location, update, go],
+  );
+  const toggleNavigation = useCallback(
+    () => update({ navigationCollapsed: !collapsed }),
+    [update, collapsed],
+  );
+  const clear = useCallback(() => {
     setQuery("");
-    setFilters({});
-  };
+    // Unchanged when there are no filters, so the filtered rows stay memoised.
+    setFilters((f) => (Object.keys(f).length ? {} : f));
+  }, []);
+  const setFilter = useCallback(
+    (id: string, value: string) => setFilters((f) => ({ ...f, [id]: value })),
+    [],
+  );
+  const openExport = useCallback(() => {
+    setExportRecord(undefined);
+    open("export");
+  }, [open]);
   const runAction = (a: Action) => {
     if (actionKind(a) === "export") {
       setExportRecord(record);
@@ -420,54 +389,44 @@ export default function WorkspaceScreen() {
     clear();
     setPreview("populated");
     setClassSetup(undefined);
-  }, [page?.id, app.workspace.scope]);
-  const notifications = rows.filter((r) =>
-    ["critical", "attention", "unavailable"].includes(r.state.tone),
+  }, [page?.id, workspace.scope]);
+  const updates = useUpdates(rows, workspace, page?.id);
+  const queue = useMemo(() => actionQueue(filtered), [filtered]);
+  const focusItems = useMemo(
+    () =>
+      page
+        ? queueItems(
+            queue,
+            page.columns.map((column) => column.id),
+            cellText,
+          )
+        : [],
+    [queue, page],
   );
-  const notificationKey = (r: DataRecord) =>
-    [
-      app.workspace.industry,
-      app.workspace.role,
-      app.workspace.scope,
-      page?.id,
-      r.id,
-    ].join(":");
-  const searchResults = useMemo(() => {
-    if (search.trim().length < 2) return [];
-    const hits: { record: DataRecord; location: Location }[] = [];
-    for (const type of ["org", "product"] as const)
-      for (const name of type === "org"
-        ? role.organization
-        : visibleProducts(app.workspace)) {
-        const b = getBranch(app.workspace, type, name);
-        for (const tab of Object.keys(b ?? {})) {
-          const loc = { type, name, tab };
-          const p = getPage(app.workspace, loc);
-          if (!p) continue;
-          for (const r of filterRecords(
-            scopedRecords(p, app.workspace.scope),
-            search,
-            {},
-          )) {
-            hits.push({ record: r, location: loc });
-            if (hits.length >= 12) return hits;
-          }
-        }
-      }
-    return hits;
-  }, [search, app.workspace, role]);
-  if (!app.ready) return <LaunchScreen />;
-  if (!app.session) return <Login />;
+  const labelFor = useMemo(
+    () =>
+      home
+        ? (m: Metric) => homeMetricLabel(workspace.role, m.label)
+        : undefined,
+    [home, workspace.role],
+  );
+  const renderRowActions = useMemo(
+    () =>
+      rowActionsFor({
+        gateAttendance: gateAttendancePage,
+        kinds: setup.kinds,
+        residence: setup.residence,
+        camera: setup.camera,
+        onMark: setMarkingId,
+        onMenu: setClassSetup,
+      }),
+    [gateAttendancePage, setup],
+  );
+  const marking = markingId
+    ? rows.find((row) => row.id === markingId && row.cells.status === "Absent")
+    : undefined;
   const exportRows = exportRecord ? [exportRecord] : filtered;
   const unavailable = preview !== "populated" && preview !== "degraded";
-  const queue = actionQueue(filtered);
-  const focusItems = page
-    ? queueItems(
-        queue,
-        page.columns.map((column) => column.id),
-        cellText,
-      )
-    : [];
   return (
     <View
       style={{
@@ -494,170 +453,26 @@ export default function WorkspaceScreen() {
               navigate={navigate}
               open={open}
               collapsed={collapsed}
-              onToggle={() => app.update({ navigationCollapsed: !collapsed })}
+              onToggle={toggleNavigation}
             />
           </View>
         )}
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Row
-            style={{
-              height: 66,
-              paddingHorizontal: phone ? 10 : 18,
-              borderBottomWidth: 2,
-              borderBottomColor: headerAccent,
-              backgroundColor: c.hero,
-              gap: phone ? 8 : 15,
-            }}
-          >
-            {!side && (
-              <IconButton
-                name="menu"
-                label="Open navigation"
-                onPress={() => open("menu")}
-              />
-            )}
-            {phone ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Open Ask Vizenta"
-                onPress={openAssistant}
-                style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-              >
-                <BrandMark size={35} radius={9} markScale={0.72} />
-              </Pressable>
-            ) : (
-              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                <Txt
-                  size={18}
-                  bold
-                  color={headerAccent}
-                  lines={1}
-                  style={{ letterSpacing: -0.4 }}
-                >
-                  {pageTitle}
-                </Txt>
-                <Txt size={11} color={c.muted} lines={1}>
-                  {pageSubtitle}
-                </Txt>
-              </View>
-            )}
-            {!phone &&
-              (width >= 1180 ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Search workspace"
-                  onPress={() => open("search")}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
-                    backgroundColor: c.background,
-                    borderRadius: 8,
-                    padding: 11,
-                    width: width > 1300 ? 230 : 185,
-                  }}
-                >
-                  <Icon name="search" size={16} />
-                  <Txt size={11} color={c.subtle}>
-                    Search workspace
-                  </Txt>
-                </Pressable>
-              ) : (
-                <IconButton
-                  name="search"
-                  label="Search workspace"
-                  onPress={() => open("search")}
-                />
-              ))}
-            <View style={{ flex: phone ? 1 : undefined, minWidth: 0 }}>
-              <Select
-                compact
-                height={35}
-                fill={phone}
-                label="Assigned scope"
-                value={app.workspace.scope}
-                options={role.scopes.map((value) => ({ value, label: value }))}
-                onChange={changeScope}
-                icon={phone ? undefined : "site"}
-              />
-            </View>
-            {!phone && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Open Ask Vizenta"
-                accessibilityState={{ expanded: assistantOpen }}
-                aria-expanded={assistantOpen}
-                onPress={openAssistant}
-                style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-              >
-                <BrandMark size={35} radius={9} markScale={0.72} />
-              </Pressable>
-            )}
-            {!phone && (
-              <IconButton
-                name="grid"
-                label="Switch application"
-                onPress={() => open("apps")}
-              />
-            )}
-            <View>
-              <IconButton
-                name="bell"
-                label="Notifications"
-                onPress={() => open("notifications")}
-              />
-              {notifications.some(
-                (r) => !app.readNotifications.includes(notificationKey(r)),
-              ) && (
-                <View
-                  pointerEvents="none"
-                  style={{
-                    position: "absolute",
-                    right: 10,
-                    top: 9,
-                    width: 5,
-                    height: 5,
-                    borderRadius: 3,
-                    backgroundColor: c.attention,
-                  }}
-                />
-              )}
-            </View>
-            {width >= 1180 && (
-              <IconButton
-                name="help"
-                label="Help center"
-                onPress={() => open("help")}
-              />
-            )}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Profile and settings"
-              onPress={() => open("settings")}
-              style={{
-                width: 35,
-                height: 35,
-                borderRadius: 18,
-                backgroundColor: c.actionPrimary,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              {personIn(app.name) ? (
-                // A signed-in persona with a person's name shows their portrait.
-                <PersonAvatar name={app.name} size={35} decorative />
-              ) : (
-                <Txt size={11} bold color={c.actionInk}>
-                  {app.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .slice(0, 2)
-                    .join("")
-                    .toUpperCase()}
-                </Txt>
-              )}
-            </Pressable>
-          </Row>
+          <WorkspaceHeader
+            title={pageTitle}
+            subtitle={pageSubtitle}
+            accent={headerAccent}
+            width={width}
+            side={side}
+            scope={workspace.scope}
+            scopes={role.scopes}
+            onScope={changeScope}
+            assistantOpen={assistantOpen}
+            onAssistant={openAssistant}
+            onOpen={open}
+            unread={updates.unread}
+            name={app.name}
+          />
           <ScrollView
             ref={scroll}
             testID="workspace-scroll"
@@ -679,7 +494,7 @@ export default function WorkspaceScreen() {
                   description="Your role or assigned scope cannot access this destination."
                   label="Return to overview"
                   icon="lock"
-                  action={() => go(homeLocation(app.workspace), true)}
+                  action={() => go(homeLocation(workspace), true)}
                 />
               ) : location.record && !record ? (
                 <EmptyState
@@ -702,184 +517,47 @@ export default function WorkspaceScreen() {
               ) : (
                 <>
                   {phone && (
-                    <Row
-                      style={{
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        flexWrap: "wrap",
-                        gap: 16,
-                      }}
-                    >
-                      <View style={{ flex: 1, minWidth: 200, gap: 5 }}>
-                        <MissionLabel mission={mission} />
-                        <Row style={{ flexWrap: "wrap" }}>
-                          <Txt
-                            size={24}
-                            bold
-                            style={{ letterSpacing: -0.8, lineHeight: 29 }}
-                          >
-                            {pageTitle}
-                          </Txt>
-                        </Row>
-                        <Txt size={12} color={c.muted}>
-                          {pageSubtitle}
-                        </Txt>
-                      </View>
-                      <Row>
-                        <Button
-                          label="Ask Vizenta"
-                          icon="sparkle"
-                          onPress={() => open("assistant")}
-                          variant="primary"
-                          compact
-                        />
-                      </Row>
-                    </Row>
+                    <PhoneHeading
+                      mission={mission}
+                      title={pageTitle}
+                      subtitle={pageSubtitle}
+                      onAssistant={() => open("assistant")}
+                    />
                   )}
                   {!metric && (
-                    <View
-                      style={{
-                        marginTop: -7,
-                        borderBottomWidth: 1,
-                        borderColor: c.border,
-                      }}
-                    >
-                      <ScrollView
-                        horizontal
-                        accessibilityRole="tablist"
-                        accessibilityLabel={`${location.name} views`}
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ gap: 24 }}
-                      >
-                        {Object.keys(branch ?? {}).map((tab) => (
-                          <Pressable
-                            key={tab}
-                            accessibilityRole="tab"
-                            accessibilityLabel={tab}
-                            accessibilityState={{
-                              selected: tab === location.tab,
-                            }}
-                            aria-selected={tab === location.tab}
-                            onPress={() =>
-                              go({
-                                ...location,
-                                tab,
-                                record: undefined,
-                                metric: undefined,
-                              })
-                            }
-                            style={{
-                              paddingVertical: 13,
-                              paddingHorizontal: 4,
-                              backgroundColor: "transparent",
-                              borderBottomWidth: 2,
-                              borderBottomColor:
-                                tab === location.tab ? c.link : "transparent",
-                            }}
-                          >
-                            <Txt
-                              size={12}
-                              bold={tab === location.tab}
-                              color={tab === location.tab ? c.link : c.muted}
-                            >
-                              {tab}
-                            </Txt>
-                          </Pressable>
-                        ))}
-                      </ScrollView>
-                    </View>
+                    <TabBar
+                      label={`${location.name} views`}
+                      tabs={Object.keys(branch ?? {}).map((tab) => ({
+                        value: tab,
+                        label: tab,
+                      }))}
+                      value={location.tab}
+                      onChange={(tab) =>
+                        go({
+                          ...location,
+                          tab,
+                          record: undefined,
+                          metric: undefined,
+                        })
+                      }
+                      scroll
+                      style={{ marginTop: -7 }}
+                    />
                   )}
                   {metric ? (
-                    <>
-                      <Card style={{ gap: 15 }}>
-                        <Button
-                          label="Back to overview"
-                          icon="back"
-                          onPress={back}
-                        />
-                        <Txt size={45} bold color={c.link}>
-                          {metric.valuesByScope?.[app.workspace.scope] ??
-                            metric.value}
-                        </Txt>
-                        <Txt>
-                          {metric.contextsByScope?.[app.workspace.scope] ??
-                            metric.context}
-                        </Txt>
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            flexWrap: "wrap",
-                            gap: 18,
-                          }}
-                        >
-                          {metricFacts(metric, page, app.workspace.scope).map(
-                            (fact) => (
-                              <View
-                                key={fact.label}
-                                style={{
-                                  width: phone ? "100%" : "45%",
-                                  gap: 5,
-                                }}
-                              >
-                                <Txt size={11} color={c.muted}>
-                                  {fact.label}
-                                </Txt>
-                                <Txt size={13} bold>
-                                  {fact.value}
-                                </Txt>
-                              </View>
-                            ),
-                          )}
-                        </View>
-                        <Txt size={12} color={c.muted}>
-                          {metric.denominator ??
-                            "Related records are shown below. This list may not include every record used for the metric."}
-                        </Txt>
-                      </Card>
-                      <Card style={{ padding: 0, overflow: "hidden" }}>
-                        <View
-                          style={{ paddingVertical: 11, paddingHorizontal: 14 }}
-                        >
-                          <SectionTitle
-                            title="Supporting data"
-                            subtitle="Sources and decision impact for this value."
-                          />
-                        </View>
-                        {page.sources.map((source) => (
-                          <View
-                            key={source.label}
-                            style={{
-                              paddingVertical: 11,
-                              paddingHorizontal: 13,
-                              borderTopWidth: 1,
-                              borderColor: c.border,
-                              gap: 4,
-                            }}
-                          >
-                            <Row style={{ alignItems: "flex-start" }}>
-                              <Txt size={12} bold style={{ flex: 1 }}>
-                                {source.label}
-                              </Txt>
-                              <View style={{ maxWidth: "50%" }}>
-                                <Badge
-                                  label={source.value}
-                                  tone={source.tone}
-                                />
-                              </View>
-                            </Row>
-                            <Txt size={11} color={c.muted}>
-                              {source.impact}
-                            </Txt>
-                          </View>
-                        ))}
-                      </Card>
-                    </>
+                    <MetricDetail
+                      metric={metric}
+                      page={page}
+                      scope={workspace.scope}
+                      phone={phone}
+                      onBack={back}
+                    />
                   ) : !shownMetrics.length ? null : (
                     <>
                       {home && preview === "populated" && rows.length > 0 && (
                         <MissionBoard
                           mission={mission}
-                          scope={app.workspace.scope}
+                          scope={workspace.scope}
                           count={queue.length}
                           critical={queue.some(
                             (item) => item.state.tone === "critical",
@@ -890,115 +568,39 @@ export default function WorkspaceScreen() {
                             2,
                           )}
                           metrics={shownMetrics}
-                          readinessLanes={
-                            app.workspace.role === "customer_admin"
-                          }
+                          readinessLanes={workspace.role === "customer_admin"}
                           onOpenRecord={openRecord}
                         />
                       )}
                       <Metrics
-                        metrics={
-                          preview === "populated"
-                            ? shownMetrics
-                            : shownMetrics.map((m) => ({
-                                ...m,
-                                value: "—",
-                                valuesByScope: undefined,
-                                contextsByScope: undefined,
-                                context: "Unavailable in this review state",
-                                tone: "unavailable" as const,
-                              }))
-                        }
-                        scope={app.workspace.scope}
+                        metrics={metricTiles}
+                        scope={workspace.scope}
                         narrow={phone}
                         accent={missionColor(c, mission.family)}
-                        labelFor={
-                          home
-                            ? (m) =>
-                                homeMetricLabel(app.workspace.role, m.label)
-                            : undefined
-                        }
-                        onPress={(m) => go({ ...location, metric: m.label })}
+                        labelFor={labelFor}
+                        onPress={openMetric}
                       />
                     </>
                   )}
-                  {preview !== "populated" && (
-                    <Card
-                      style={{ backgroundColor: c.attentionBg, padding: 15 }}
-                    >
-                      <Row
-                        style={{
-                          flexWrap: "wrap",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <Txt size={12} color={c.attention}>
-                          Review mode · {preview}
-                        </Txt>
-                        <Button
-                          compact
-                          label="Show records"
-                          onPress={() => setPreview("populated")}
-                        />
-                      </Row>
-                    </Card>
-                  )}
-                  {preview === "degraded" && (
-                    <Card style={{ backgroundColor: c.attentionBg, gap: 6 }}>
-                      <Txt bold size={13}>
-                        Source confidence is reduced
-                      </Txt>
-                      <Txt size={12}>{page.states.degraded}</Txt>
-                    </Card>
-                  )}
-                  {page.banner && (
-                    <Card
-                      style={{
-                        backgroundColor: c.attentionBg,
-                        gap: 5,
-                        padding: 16,
-                      }}
-                    >
-                      <Txt size={12} bold>
-                        {page.banner.title}
-                      </Txt>
-                      <Txt size={12} color={c.muted}>
-                        {page.banner.text}
-                      </Txt>
-                    </Card>
-                  )}
+                  <PageNotices
+                    preview={preview}
+                    page={page}
+                    onShowRecords={() => setPreview("populated")}
+                  />
                   {unavailable ? (
-                    <Card>
-                      <EmptyState
-                        title={
-                          {
-                            empty: "No records yet",
-                            unavailable: "Source unavailable",
-                            notConfigured: "Configuration required",
-                            unauthorized: "Access restricted",
-                            insufficientHistory: "More history needed",
-                          }[preview] ?? "Unavailable"
-                        }
-                        description={
-                          page.states[preview] ??
-                          "This source cannot currently support a conclusion. Its values are unknown, not zero."
-                        }
-                        icon={preview === "unauthorized" ? "lock" : "activity"}
-                        label="Show records"
-                        action={() => setPreview("populated")}
-                      />
-                    </Card>
-                  ) : page.id === "ca-setup-setup" ? (
-                    <SetupView key={app.workspace.scope} notify={app.notify} />
-                  ) : page.id === "ca-setup-criteria" ? (
-                    <CriteriaView
-                      key={app.workspace.scope}
-                      notify={app.notify}
+                    <UnavailableState
+                      preview={preview}
+                      page={page}
+                      onShowRecords={() => setPreview("populated")}
                     />
+                  ) : page.id === "ca-setup-setup" ? (
+                    <SetupView key={workspace.scope} notify={app.notify} />
+                  ) : page.id === "ca-setup-criteria" ? (
+                    <CriteriaView key={workspace.scope} notify={app.notify} />
                   ) : page.id === MEDIA_EXPLORER_PAGE ? (
                     <MediaExplorer
-                      key={app.workspace.scope}
-                      scope={app.workspace.scope}
+                      key={workspace.scope}
+                      scope={workspace.scope}
                       selection={{
                         org: params.org,
                         camera: params.camera,
@@ -1024,10 +626,18 @@ export default function WorkspaceScreen() {
                     />
                   ) : page.id === "ca-setup-dashboard" ? (
                     <DashboardView
-                      key={app.workspace.scope}
+                      key={workspace.scope}
                       rows={rows}
-                      cameras={sourceTabRows("Camera Setup")}
-                      clips={sourceTabRows("Video Analytics")}
+                      cameras={setupTabRows(
+                        workspace,
+                        setupState,
+                        "Camera Setup",
+                      )}
+                      clips={setupTabRows(
+                        workspace,
+                        setupState,
+                        "Video Analytics",
+                      )}
                     />
                   ) : (
                     <View
@@ -1046,93 +656,35 @@ export default function WorkspaceScreen() {
                         }}
                       >
                         {peopleUsers && (
-                          <Row
-                            style={{
-                              gap: 12,
-                              flexWrap: "wrap",
-                              alignItems: "center",
+                          <UserDirectoryPicker
+                            value={selectedPeopleGroup.value}
+                            options={peopleGroups.map(({ value, label }) => ({
+                              value,
+                              label,
+                            }))}
+                            onChange={(userGroup) => {
+                              clear();
+                              setClassSetup(undefined);
+                              router.setParams({
+                                userGroup,
+                                record: "",
+                                metric: "",
+                              });
                             }}
-                          >
-                            <Txt size={13} bold>
-                              User directory
-                            </Txt>
-                            <Select
-                              label="User directory"
-                              value={selectedPeopleGroup.value}
-                              options={peopleGroups.map(({ value, label }) => ({
-                                value,
-                                label,
-                              }))}
-                              onChange={(userGroup) => {
-                                setQuery("");
-                                setFilters({});
-                                setClassSetup(undefined);
-                                router.setParams({
-                                  userGroup,
-                                  record: "",
-                                  metric: "",
-                                });
-                              }}
-                            />
-                          </Row>
+                          />
                         )}
                         <Records
                           key={page.id}
-                          headingSubtitle={`${roleName} · ${app.workspace.scope}`}
+                          headingSubtitle={`${roleName} · ${workspace.scope}`}
                           headingActions={
-                            classKinds.length > 0 ? (
-                              <Row style={{ flexWrap: "wrap", gap: 8 }}>
-                                {!(
-                                  learnerManagement &&
-                                  location.type === "product" &&
-                                  location.name === "Class & Lab Attendance"
-                                ) && (
-                                  <View style={{ flex: phone ? 1 : undefined }}>
-                                    <Button
-                                      compact={!phone}
-                                      label="Add"
-                                      icon="plus"
-                                      variant="primary"
-                                      onPress={() =>
-                                        setClassSetup({
-                                          kind: classKinds[0],
-                                          mode:
-                                            classKinds.length > 1
-                                              ? "choose-add"
-                                              : "add",
-                                        })
-                                      }
-                                    />
-                                  </View>
-                                )}
-                                {!(
-                                  learnerManagement &&
-                                  location.type === "product" &&
-                                  location.name === "Class & Lab Attendance"
-                                ) &&
-                                  !cameraManagement &&
-                                  !residenceManagement &&
-                                  !sourcesManagement && (
-                                    <View
-                                      style={{ flex: phone ? 1 : undefined }}
-                                    >
-                                      <Button
-                                        compact={!phone}
-                                        label="Bulk upload"
-                                        icon="folder"
-                                        onPress={() =>
-                                          setClassSetup({
-                                            kind: classKinds[0],
-                                            mode:
-                                              classKinds.length > 1
-                                                ? "choose-bulk"
-                                                : "bulk",
-                                          })
-                                        }
-                                      />
-                                    </View>
-                                  )}
-                              </Row>
+                            setup.kinds.length > 0 ? (
+                              <SetupActions
+                                kinds={setup.kinds}
+                                add={setup.add}
+                                bulk={setup.bulk}
+                                phone={phone}
+                                onRequest={setClassSetup}
+                              />
                             ) : (
                               page.primaryAction && (
                                 <Button
@@ -1150,57 +702,18 @@ export default function WorkspaceScreen() {
                           query={query}
                           onQuery={setQuery}
                           filters={filters}
-                          onFilter={(id, value) =>
-                            setFilters((f) => ({ ...f, [id]: value }))
-                          }
+                          onFilter={setFilter}
                           onOpen={openRecord}
-                          renderRowActions={
-                            gateAttendancePage
-                              ? (row) =>
-                                  row.cells.status === "Absent" ? (
-                                    <Button
-                                      compact
-                                      label="Mark attendance"
-                                      onPress={() => setMarkingId(row.id)}
-                                    />
-                                  ) : null
-                              : classKinds.length
-                                ? (row) =>
-                                    (residenceManagement &&
-                                      row.type === "leave" &&
-                                      !leaveEditable(row)) ||
-                                    (cameraManagement &&
-                                      ![
-                                        "camera",
-                                        "camera_source",
-                                        "gate_camera",
-                                      ].includes(row.type)) ? null : (
-                                      <IconButton
-                                        name="more"
-                                        label={`Actions for ${row.detail.title}`}
-                                        onPress={() =>
-                                          setClassSetup({
-                                            mode: "menu",
-                                            kind: kindOf(row, classKinds[0]),
-                                            recordId: row.id,
-                                          })
-                                        }
-                                      />
-                                    )
-                                : undefined
-                          }
+                          renderRowActions={renderRowActions}
                           onClear={clear}
-                          onExport={() => {
-                            setExportRecord(undefined);
-                            open("export");
-                          }}
+                          onExport={openExport}
                         />
                       </View>
                       <View style={{ width: wide ? 310 : "100%" }}>
                         <ContextPanels
                           page={page}
                           evidenceCollapsed={evidenceStartsCollapsed(
-                            app.workspace.role,
+                            workspace.role,
                             page.sources,
                           )}
                         />
@@ -1224,151 +737,48 @@ export default function WorkspaceScreen() {
             </View>
           </ScrollView>
           {phone && (
-            <Row
-              style={{
-                height: 65,
-                borderTopWidth: 1,
-                borderColor: c.border,
-                backgroundColor: c.surface,
-                justifyContent: "space-around",
-              }}
-            >
-              {[
-                ["home", "Overview"],
-                ["grid", "Explore"],
-                ["sparkle", "Ask Vizenta"],
-                ["search", "Search"],
-                ["settings", "Settings"],
-              ].map(([icon, label], i) => (
-                <Pressable
-                  key={label}
-                  accessibilityRole="button"
-                  accessibilityLabel={label}
-                  onPress={() =>
-                    i === 0
-                      ? go(homeLocation(app.workspace))
-                      : open(["", "menu", "assistant", "search", "settings"][i])
-                  }
-                  style={{
-                    alignItems: "center",
-                    gap: 4,
-                    padding: 8,
-                    borderRadius: 8,
-                    backgroundColor:
-                      i === 0 && home ? c.actionPrimary : "transparent",
-                  }}
-                >
-                  <Icon
-                    name={icon}
-                    color={i === 0 && home ? c.actionInk : c.link}
-                    size={20}
-                  />
-                  <Txt size={9} color={i === 0 && home ? c.actionInk : c.link}>
-                    {label}
-                  </Txt>
-                </Pressable>
-              ))}
-            </Row>
+            <BottomNav
+              home={home}
+              onHome={() => go(homeLocation(workspace))}
+              onOpen={open}
+            />
           )}
         </View>
         {side && assistantOpen && page && (
-          <View
-            testID="assistant-dock"
-            style={{
-              width: width >= 1500 ? 390 : 340,
-              minWidth: 0,
-              borderLeftWidth: 1,
-              borderColor: c.border,
-              backgroundColor: c.surface,
-            }}
-          >
-            <Row
-              style={{
-                height: 66,
-                paddingHorizontal: 16,
-                borderBottomWidth: 1,
-                borderColor: c.border,
-                justifyContent: "space-between",
-              }}
-            >
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Txt size={15} bold color={c.link}>
-                  Ask Vizenta
-                </Txt>
-                <Txt size={10} color={c.muted} lines={1}>
-                  Conversation for this view
-                </Txt>
-              </View>
-              <IconButton
-                name="close"
-                label="Close Ask Vizenta"
-                onPress={() => setAssistantOpen(false)}
-              />
-            </Row>
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{
-                padding: 16,
-                paddingBottom: 30,
-                gap: 14,
-              }}
-            >
-              <Assistant page={page} rows={rows} onOpen={openRecord} />
-            </ScrollView>
-          </View>
+          <AssistantDock
+            page={page}
+            rows={rows}
+            wide={width >= 1500}
+            onOpenRecord={openRecord}
+            onClose={() => setAssistantOpen(false)}
+          />
         )}
       </View>
-      {!!app.toast && (
-        <View
-          accessibilityRole="alert"
-          style={{
-            position: "absolute",
-            bottom: phone ? 80 : 24,
-            left: phone ? 18 : undefined,
-            right: phone ? 18 : 30,
-            backgroundColor: c.ink,
-            borderRadius: 12,
-            padding: 17,
-            maxWidth: 460,
-          }}
-        >
-          <Txt size={12} color={c.white}>
-            {app.toast}
-          </Txt>
-        </View>
+      <ToastBanner />
+      {marking && (
+        <Dialog title="Mark attendance" onClose={() => setMarkingId(undefined)}>
+          <MarkAttendanceForm
+            title={marking.detail.title}
+            onCancel={() => setMarkingId(undefined)}
+            onSave={(mark) => {
+              storeEditedRecord(
+                classStoreKey,
+                markedRecord(marking, mark, app.name),
+              );
+              setMarkingId(undefined);
+              app.notify("Attendance marked for this session.");
+            }}
+          />
+        </Dialog>
       )}
-      {markingId &&
-        rows.some(
-          (row) => row.id === markingId && row.cells.status === "Absent",
-        ) && (
-          <Dialog
-            title="Mark attendance"
-            onClose={() => setMarkingId(undefined)}
-          >
-            <MarkAttendanceForm
-              title={rows.find((row) => row.id === markingId)!.detail.title}
-              onCancel={() => setMarkingId(undefined)}
-              onSave={(marking) => {
-                const target = rows.find((row) => row.id === markingId);
-                if (!target || target.cells.status !== "Absent") return;
-                storeEditedRecord(
-                  classStoreKey,
-                  markedRecord(target, marking, app.name),
-                );
-                setMarkingId(undefined);
-                app.notify("Attendance marked for this session.");
-              }}
-            />
-          </Dialog>
-        )}
       {classSetup && page && (
         <SetupDialog
-          key={`${classStoreKey}:${app.workspace.scope}:${classSetup.mode}:${classSetup.kind}:${classSetup.recordId ?? "new"}`}
+          key={`${classStoreKey}:${workspace.scope}:${classSetup.mode}:${classSetup.kind}:${classSetup.recordId ?? "new"}`}
           request={classSetup}
           onRequest={setClassSetup}
           page={page}
           rows={rows}
-          workspace={app.workspace}
+          workspace={workspace}
           scopes={role.scopes}
           actor={app.name}
           storeKey={classStoreKey}
@@ -1382,7 +792,7 @@ export default function WorkspaceScreen() {
       )}
       {!!modal && (
         <Dialog
-          title={titles[modal] ?? "Vizenta"}
+          title={DIALOG_TITLES[modal] ?? "Vizenta"}
           onClose={close}
           wide={modal === "search"}
         >
@@ -1416,222 +826,55 @@ export default function WorkspaceScreen() {
             </View>
           )}
           {modal === "search" && (
-            <>
-              <Field
-                label="Search all entitled views"
-                value={search}
-                onChange={setSearch}
-                placeholder="Try a campus, person, incident or reference…"
-              />
-              <Txt size={12} color={c.muted}>
-                Results are limited to {roleName} · {app.workspace.scope}.
-              </Txt>
-              {search.length < 2 ? (
-                <Txt color={c.muted}>
-                  Enter at least 2 characters to search.
-                </Txt>
-              ) : searchResults.length ? (
-                searchResults.map((hit, i) => (
-                  <Pressable
-                    key={`${hit.record.id}-${i}`}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      go({ ...hit.location, record: hit.record.id });
-                      close();
-                    }}
-                    style={{
-                      padding: 16,
-                      borderWidth: 1,
-                      borderColor: c.border,
-                      borderRadius: 10,
-                      gap: 5,
-                    }}
-                  >
-                    <PersonOr record={hit.record}>
-                      <Txt size={13} bold>
-                        {hit.record.detail.title}
-                      </Txt>
-                    </PersonOr>
-                    <Txt size={12} color={c.muted}>
-                      {hit.location.name} / {hit.location.tab}
-                    </Txt>
-                    <Badge
-                      label={hit.record.state.label}
-                      tone={hit.record.state.tone}
-                    />
-                  </Pressable>
-                ))
-              ) : (
-                <EmptyState
-                  title="No results found"
-                  description="Try a different name or reference within your assigned scope."
-                />
-              )}
-            </>
+            <SearchPanel
+              workspace={workspace}
+              role={role}
+              roleName={roleName}
+              memory={lastSearch}
+              onOpen={(hit: SearchHit) => {
+                go({ ...hit.location, record: hit.record.id });
+                close();
+              }}
+            />
           )}
           {modal === "export" && page && (
-            <>
-              <Badge label="CSV export" tone="healthy" />
-              <Txt size={20} bold>
-                Take your current view with you.
-              </Txt>
-              <Txt color={c.muted}>
-                {exportRows.length} records from {page.heading}. Only the
-                current scope and filters are included.
-              </Txt>
-              <Card style={{ gap: 10 }}>
-                <Txt size={12}>Scope · {app.workspace.scope}</Txt>
-                <Txt size={12}>
-                  Fields · {page.columns.map((col) => col.label).join(", ")},
-                  status, record ID
-                </Txt>
-              </Card>
-              <Button
-                label="Export CSV"
-                icon="download"
-                variant="primary"
-                onPress={() => {
-                  void app.exportRows(page, exportRows);
-                  close();
-                }}
-              />
-            </>
+            <ExportPanel
+              page={page}
+              count={exportRows.length}
+              scope={workspace.scope}
+              onExport={() => {
+                void app.exportRows(page, exportRows);
+                close();
+              }}
+            />
           )}
           {modal === "notifications" && (
-            <>
-              <Row style={{ justifyContent: "space-between" }}>
-                <Txt size={12} color={c.muted}>
-                  Updates in this view
-                </Txt>
-                <Button
-                  compact
-                  label="Mark all as read"
-                  onPress={() => {
-                    app.update({
-                      readNotifications: [
-                        ...new Set([
-                          ...app.readNotifications,
-                          ...notifications.map(notificationKey),
-                        ]),
-                      ],
-                    });
-                    app.notify("Updates marked as read.");
-                  }}
-                />
-              </Row>
-              {notifications.length ? (
-                notifications.map((r) => (
-                  <Pressable
-                    key={r.id}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      app.update({
-                        readNotifications: [
-                          ...new Set([
-                            ...app.readNotifications,
-                            notificationKey(r),
-                          ]),
-                        ],
-                      });
-                      openRecord(r);
-                    }}
-                    style={{
-                      padding: 17,
-                      borderRadius: 12,
-                      backgroundColor: app.readNotifications.includes(
-                        notificationKey(r),
-                      )
-                        ? c.background
-                        : c.primarySoft,
-                      gap: 8,
-                    }}
-                  >
-                    <PersonOr record={r}>
-                      <Txt size={13} bold>
-                        {r.detail.title}
-                      </Txt>
-                    </PersonOr>
-                    <Txt size={12} color={c.muted}>
-                      {r.detail.summary}
-                    </Txt>
-                    <Badge label={r.state.label} tone={r.state.tone} />
-                  </Pressable>
-                ))
-              ) : (
-                <EmptyState
-                  title="You're all caught up"
-                  description="No attention items in this view."
-                  icon="check"
-                />
-              )}
-            </>
+            <NotificationsPanel
+              notifications={updates.updates}
+              isRead={updates.isRead}
+              onMarkAll={() => {
+                updates.markRead(updates.updates);
+                app.notify("Updates marked as read.");
+              }}
+              onOpen={(r) => {
+                updates.markRead([r]);
+                openRecord(r);
+              }}
+            />
           )}
           {modal === "apps" && (
-            <>
-              <Txt color={c.muted}>
-                A connected workspace for your organization.
-              </Txt>
-              <Button
-                label="Vizenta Vision · Presence, Safety & Insights"
-                icon="grid"
-                onPress={() => {
-                  go(homeLocation(app.workspace));
-                  close();
-                }}
-              />
-              <Button
-                label="Workforce & HRMS"
-                icon="users"
-                disabled={
-                  !visibleProducts(app.workspace).includes(
-                    "Workforce Attendance",
-                  )
-                }
-                onPress={() => navigate("product", "Workforce Attendance")}
-              />
-              {!visibleProducts(app.workspace).includes(
+            <AppsPanel
+              workforce={visibleProducts(workspace).includes(
                 "Workforce Attendance",
-              ) && (
-                <Txt size={12} color={c.muted}>
-                  Workforce & HRMS is not entitled for this industry and role.
-                </Txt>
               )}
-            </>
+              onHome={() => {
+                go(homeLocation(workspace));
+                close();
+              }}
+              onWorkforce={() => navigate("product", "Workforce Attendance")}
+            />
           )}
-          {modal === "help" && (
-            <>
-              <Txt size={21} bold>
-                Make yourself at home.
-              </Txt>
-              {[
-                [
-                  "Finding your way",
-                  "Use Presence for verified observations, Safety for incident and response workflows, and Insights for permitted analysis.",
-                ],
-                [
-                  "Changing your workspace",
-                  "Open the organization selector to choose your industry, role, and scope. Scope controls which records you can see.",
-                ],
-                [
-                  "Reviewing a record",
-                  "Select a row or card to open its facts, history and permitted actions. A saved review appears in the activity trail.",
-                ],
-                [
-                  "Understanding sources",
-                  "Source panels disclose freshness and decision impact. Unavailable data stays unknown and never becomes a safe or zero result.",
-                ],
-              ].map(([title, body]) => (
-                <Card key={title} style={{ gap: 8 }}>
-                  <Txt size={14} bold>
-                    {title}
-                  </Txt>
-                  <Txt size={12} color={c.muted}>
-                    {body}
-                  </Txt>
-                </Card>
-              ))}
-            </>
-          )}
+          {modal === "help" && <HelpPanel />}
         </Dialog>
       )}
     </View>

@@ -1,3 +1,4 @@
+const { contract, educationWithExtensions, eachPage } = require("./helpers.cjs");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const {
@@ -13,42 +14,13 @@ const {
   hasCameraErrors,
 } = require("../src/domain/cameras/setup.ts");
 
-function education() {
-  const d = structuredClone(
-    require("../src/domain/contracts/data/education.json"),
-  );
-  for (const [file, fn] of [
-    ["learnerExtension", "customerAdminLearners"],
-    ["gateExtension", "gateAttendance"],
-    ["wardenExtension", "wardenProduct"],
-    ["sourcesExtension", "sourcesAndSetup"],
-    ["surveillanceExtension", "surveillanceUsers"],
-  ])
-    require("../src/domain/contracts/" + file + ".ts")[fn](
-      fn === "customerAdminLearners" ? d.pages : d,
-      require("../src/domain/surveillance/samples.json"),
-    );
-  require("../src/domain/contracts/demoData.ts").populateDemoData(d);
-  return d;
-}
 function load(id) {
-  const d =
-    id === "education"
-      ? education()
-      : structuredClone(require("../src/domain/contracts/data/" + id + ".json"));
+  const d = id === "education" ? educationWithExtensions() : structuredClone(contract(id));
   realisticContacts(d);
   return d;
 }
-function* pages(d) {
-  for (const [role, areas] of Object.entries(d.pages))
-    for (const branches of Object.values(areas))
-      for (const tabs of Object.values(branches))
-        for (const [tab, base] of Object.entries(tabs))
-          for (const [variant, page] of base.variants
-            ? Object.entries(base.variants)
-            : [[undefined, base]])
-            yield { role, tab, variant, page };
-}
+// Each page as it is shown: its variants when it has them, else the page itself.
+const pages = (d) => eachPage(d, { variants: "instead" });
 const industries = ["education", "retail", "manufacturing"];
 const expanded = Object.fromEntries(
   industries.map((id) => {
@@ -161,7 +133,7 @@ test("derived setup forms still validate", () => {
 
 test("corporate and manufacturing need no contact cleanup at start-up", () => {
   for (const id of ["corporate", "manufacturing"]) {
-    const text = JSON.stringify(require("../src/domain/contracts/data/" + id + ".json").pages);
+    const text = JSON.stringify(contract(id).pages);
     assert.doesNotMatch(text, /@example\.com|9876\d{6}|192\.0\.2\./, id);
     assert.doesNotMatch(text, /"eyebrow":"[^"]*· [a-z][a-z0-9_-]*\d[a-z0-9_-]*"/, id);
   }
@@ -185,7 +157,7 @@ test("no placeholder contacts or copied education wording remain", () => {
 
 test("corporate placeholders are replaced by authored rows inside each persona's scope", () => {
   const { applyCorporateRows } = require("../src/domain/contracts/corporateDemo.ts");
-  const d = structuredClone(require("../src/domain/contracts/data/corporate.json"));
+  const d = structuredClone(contract("corporate"));
   const rows = {};
   for (const i of [1, 2, 3, 4])
     Object.assign(rows, require("../src/domain/contracts/corporate/rows-" + i + ".json"));

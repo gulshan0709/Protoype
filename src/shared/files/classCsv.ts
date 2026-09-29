@@ -6,6 +6,7 @@ import {
   TEMPLATE_COLUMNS,
   type SetupKind,
 } from "../../domain/classes/setup";
+import { csvCell } from "../../domain/common/csv";
 
 export function downloadTemplate(kind: SetupKind) {
   const example =
@@ -51,11 +52,28 @@ export function downloadTemplate(kind: SetupKind) {
   const header = TEMPLATE_COLUMNS.map((k) =>
     k === "class_name" ? `${kind}_name` : k,
   );
-  const csv = [header.join(","), example.join(",")].join("\r\n");
-  saveCsv(
+  saveTemplate(
     `${kind}_upload_template.csv`,
     `${NOUN[kind].title} upload template`,
-    csv,
+    [header, example],
+  );
+}
+
+/**
+ * Saves an upload template: a header row and example rows. Values are written
+ * as they are; one with a comma, quote or line break is quoted.
+ */
+export function saveTemplate(
+  fileName: string,
+  title: string,
+  rows: readonly (readonly string[])[],
+) {
+  const cell = (value: string) =>
+    /[",\r\n]/.test(value) ? csvCell(value) : value;
+  saveCsv(
+    fileName,
+    title,
+    rows.map((row) => row.map(cell).join(",")).join("\r\n"),
   );
 }
 

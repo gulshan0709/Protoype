@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Modal, Pressable, StatusBar, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "../../application/AppProvider";
@@ -8,6 +8,7 @@ import { light } from "../../shared/theme/Theme";
 import { Txt } from "../../shared/ui/Primitives";
 import { BrandWordmark } from "../../shared/ui/Icon";
 import { PinPad } from "./PinPad";
+import { PersonAvatar } from "../workspace/components/PersonChip";
 
 export function LockScreen() {
   const lock = useAppLock();
@@ -98,6 +99,7 @@ export function LockScreen() {
         <BrandWordmark width={150} />
         <PinPad
           brand
+          avatar={<PersonAvatar name={app.name} size={56} decorative />}
           title="Enter your PIN"
           subtitle={
             cooling

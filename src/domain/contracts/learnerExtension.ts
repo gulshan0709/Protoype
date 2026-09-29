@@ -1,24 +1,9 @@
-import type { PageContract } from "./types";
+import type { Industry, PageContract } from "./types";
+import { insertTab } from "./pageBuilders";
 
 // Pages added on top of the imported reference contracts
 // (scripts/import-contracts.cjs regenerates data/*.json, so additions live
 // here instead of in the JSON).
-
-type Pages = Record<string, Record<string, Record<string, PageContract>>>;
-
-/** Inserts `tab` into a product branch right after `after`, keeping order. */
-function insertTab(
-  branch: Record<string, PageContract>,
-  after: string,
-  tab: string,
-  page: PageContract,
-) {
-  const entries = Object.entries(branch).filter(([k]) => k !== tab);
-  const at = entries.findIndex(([k]) => k === after) + 1;
-  entries.splice(at || entries.length, 0, [tab, page]);
-  for (const key of Object.keys(branch)) delete branch[key];
-  Object.assign(branch, Object.fromEntries(entries));
-}
 
 /**
  * Customer Admin → Class & Lab Attendance → Learners.
@@ -26,9 +11,7 @@ function insertTab(
  * College, which the Academic Structure contract places on Main Campus).
  * Metrics count those records; they are not new measurements.
  */
-export function customerAdminLearners(
-  pages: Record<string, { product: Pages[string] }>,
-) {
+export function customerAdminLearners(pages: Industry["pages"]) {
   const dean = pages.dean?.product["Class & Lab Attendance"]?.Learners;
   const branch = pages.customer_admin?.product["Class & Lab Attendance"];
   if (!dean || !branch || branch.Learners) return;

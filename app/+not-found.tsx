@@ -1,4 +1,3 @@
-import React from "react";
 import { useRouter } from "expo-router";
 import { EmptyState } from "../src/shared/ui/Primitives";
 export default function NotFound() {

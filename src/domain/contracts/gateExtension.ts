@@ -1,17 +1,14 @@
-import type { Industry, PageContract } from "./types";
-type Rec = PageContract["records"][number];
-function insertTab(
-  branch: Record<string, PageContract>,
-  after: string,
-  tab: string,
-  page: PageContract,
-) {
-  const entries = Object.entries(branch).filter(([k]) => k !== tab);
-  const at = entries.findIndex(([k]) => k === after) + 1;
-  entries.splice(at || entries.length, 0, [tab, page]);
-  for (const key of Object.keys(branch)) delete branch[key];
-  Object.assign(branch, Object.fromEntries(entries));
-}
+import type { DataRecord as Rec, Industry, PageContract } from "./types";
+import { str as text } from "../common/text";
+import {
+  acrossCampuses,
+  EDUCATION_TENANT_SCOPE,
+  insertTab,
+  pageStates,
+  placeholderMetrics,
+  syncProductTabs,
+  textColumns,
+} from "./pageBuilders";
 
 export function gateAttendance(education: Industry) {
   const src = education.pages;
@@ -19,7 +16,6 @@ export function gateAttendance(education: Industry) {
     src[role]?.product.Gate?.History?.records ?? [];
   const movement: Rec[] =
     src.warden?.product.Gate?.["Resident Movement"]?.records ?? [];
-  const text = (v: unknown) => (typeof v === "string" ? v : "");
 
   const attendanceRows = (
     records: Rec[],
@@ -88,13 +84,12 @@ export function gateAttendance(education: Industry) {
       };
     });
 
-  const states = (subject: string) => ({
-    empty: `No ${subject} match this scope and filter set.`,
-    degraded: `A gate source is degraded; affected ${subject} keep their last verified event and are not treated as absent.`,
-    notConfigured: "This view needs configured gate cameras.",
-    unauthorized: "Your role does not permit this view.",
-    insufficientHistory: "There is not enough gate history yet.",
-  });
+  const states = (subject: string) =>
+    pageStates(subject, {
+      degraded: `A gate source is degraded; affected ${subject} keep their last verified event and are not treated as absent.`,
+      notConfigured: "This view needs configured gate cameras.",
+      insufficientHistory: "There is not enough gate history yet.",
+    });
   const attendancePage = (id: string, records: Rec[]): PageContract =>
     ({
       id,
@@ -102,20 +97,22 @@ export function gateAttendance(education: Industry) {
       description:
         "Daily gate attendance per person: first verified entry, last exit and time on campus.",
       detailType: "gate_attendance",
-      // Replaced by live counts of the rows in scope.
-      metrics: ["Present", "Still inside", "Low confidence", "Absent"].map(
-        (label) => ({ label, value: "0", context: "", tone: "healthy" }),
-      ),
-      columns: [
-        { id: "user", label: "Name / UID", type: "text" },
-        { id: "type", label: "User type", type: "text" },
-        { id: "date", label: "Date", type: "text" },
-        { id: "shift", label: "Shift", type: "text" },
-        { id: "status", label: "Status", type: "text" },
-        { id: "log", label: "Log hours", type: "text" },
-        { id: "checkIn", label: "Check-in", type: "text" },
-        { id: "checkOut", label: "Check-out", type: "text" },
-      ],
+      metrics: placeholderMetrics([
+        "Present",
+        "Still inside",
+        "Low confidence",
+        "Absent",
+      ]),
+      columns: textColumns([
+        ["user", "Name / UID"],
+        ["type", "User type"],
+        ["date", "Date"],
+        ["shift", "Shift"],
+        ["status", "Status"],
+        ["log", "Log hours"],
+        ["checkIn", "Check-in"],
+        ["checkOut", "Check-out"],
+      ]),
       filters: [
         {
           id: "status",
@@ -148,19 +145,14 @@ export function gateAttendance(education: Industry) {
         "Current in/out status per resident from the last verified gate event.",
       detailType: "gate_in_out",
       recordLabel: "resident",
-      metrics: ["In", "Out", "Out without return"].map((label) => ({
-        label,
-        value: "0",
-        context: "",
-        tone: "healthy",
-      })),
-      columns: [
-        { id: "person", label: "Name / ID", type: "text" },
-        { id: "hostel", label: "Hostel", type: "text" },
-        { id: "status", label: "Status", type: "text" },
-        { id: "gate", label: "Gate", type: "text" },
-        { id: "captured", label: "Captured time", type: "text" },
-      ],
+      metrics: placeholderMetrics(["In", "Out", "Out without return"]),
+      columns: textColumns([
+        ["person", "Name / ID"],
+        ["hostel", "Hostel"],
+        ["status", "Status"],
+        ["gate", "Gate"],
+        ["captured", "Captured time"],
+      ]),
       filters: [
         {
           id: "hostel",
@@ -178,12 +170,7 @@ export function gateAttendance(education: Industry) {
   // Customer Admin: after Cameras. Campus-level scopes only (no hostels).
   const ca = src.customer_admin?.product.Gate;
   if (ca && !ca["User Attendance"]) {
-    const campus = (r: Rec) => [
-      "Across campuses",
-      ...r.scope.filter(
-        (x) => x !== "Across campuses" && !x.startsWith("Hostel"),
-      ),
-    ];
+    const campus = (r: Rec) => acrossCampuses(r.scope, true);
     insertTab(
       ca,
       "Cameras",
@@ -227,7 +214,7 @@ export function gateAttendance(education: Industry) {
   const va = education.core.roles.vizenta_admin;
   const vaPages = src.vizenta_admin;
   if (va?.products && vaPages && !vaPages.product.Gate) {
-    const tenant = () => ["All customers", "Northbridge Education"];
+    const tenant = () => [...EDUCATION_TENANT_SCOPE];
     vaPages.product.Gate = {
       "User Attendance": attendancePage(
         "va-gate-user-attendance",
@@ -237,13 +224,8 @@ export function gateAttendance(education: Industry) {
     };
     if (!va.products.includes("Gate")) va.products.push("Gate");
   }
-  for (const role of ["customer_admin", "warden", "vizenta_admin"]) {
-    const branch = src[role]?.product.Gate;
-    if (branch) {
-      education.core.productTabs[role] ??= {};
-      education.core.productTabs[role].Gate = Object.keys(branch);
-    }
-  }
+  for (const role of ["customer_admin", "warden", "vizenta_admin"])
+    syncProductTabs(education, role, "Gate");
 }
 
 function splitStamp(stamp: string): [string, string] {

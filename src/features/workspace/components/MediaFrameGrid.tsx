@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   Image,
   Platform,
@@ -21,7 +21,6 @@ import {
   type MediaSelection,
 } from "../../../domain/media/explorer";
 import { detectionStyles } from "../../../domain/contracts/detectionDemo";
-import type { DataRecord } from "../../../domain/contracts/types";
 import { useTheme } from "../../../shared/theme/Theme";
 import {
   Badge,
@@ -32,7 +31,17 @@ import {
 } from "../../../shared/ui/Primitives";
 import { Icon } from "../../../shared/ui/Icon";
 import { Dialog } from "../../../shared/ui/Dialog";
+import { Chip } from "../../../shared/ui/Chip";
+import { SegmentedControl } from "../../../shared/ui/SegmentedControl";
 import { CaptureFrame, MediaPlayer } from "./RecordMedia";
+import {
+  DetectionBox,
+  KeyboardHint,
+  MEDIA_BG,
+  StepArrows,
+  mediaRecord,
+  useArrowKeys,
+} from "./mediaParts";
 import { demoStills } from "./demoCaptures";
 import { mediaFrameSources } from "./mediaFrameSources";
 
@@ -61,9 +70,8 @@ function FrameThumb({ frame, height }: { frame: MediaFrame; height: number }) {
   const [failed, setFailed] = useState(false);
   const source = mediaFrameSources[frame.file];
   const still = stillOf(frame);
-  const [x, y, w, h] = still?.box ?? [0, 0, 0, 0];
   return (
-    <View style={{ height, backgroundColor: "#071c2c", overflow: "hidden" }}>
+    <View style={{ height, backgroundColor: MEDIA_BG, overflow: "hidden" }}>
       {source && !failed ? (
         <Image
           source={source.thumb}
@@ -85,17 +93,10 @@ function FrameThumb({ frame, height }: { frame: MediaFrame; height: number }) {
         </View>
       )}
       {still && frame.kind && !failed && (
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            left: `${x}%`,
-            top: `${y}%`,
-            width: `${w}%`,
-            height: `${h}%`,
-            borderWidth: 1.5,
-            borderColor: detectionStyles[frame.kind].color,
-          }}
+        <DetectionBox
+          box={still.box}
+          color={detectionStyles[frame.kind].color}
+          stroke={1.5}
         />
       )}
     </View>
@@ -123,7 +124,7 @@ const FrameTile = memo(function FrameTile({
       accessibilityRole="button"
       accessibilityLabel={`Open frame ${meta.sequence} at ${meta.timeShort}`}
       onPress={() => onOpen(index)}
-      style={({ pressed, hovered }: any) => ({
+      style={({ pressed, hovered }) => ({
         width,
         height,
         borderRadius: 8,
@@ -231,25 +232,18 @@ export function FrameGrid({
       ),
     [frames.length],
   );
-  const recordingRecord = (recording: MediaRecording): DataRecord => ({
-    id: recording.key,
-    type: "recording",
-    scope: [scope],
-    cells: {},
-    state: { label: "Available", tone: "healthy" },
-    action: "Open recording",
-    videoAsset: recording.video,
-    captureAsset: recording.video,
-    detail: {
+  const recordingRecord = (recording: MediaRecording) =>
+    mediaRecord({
+      id: recording.key,
+      type: "recording",
+      scope: [scope],
+      state: { label: "Available", tone: "healthy" },
+      action: "Open recording",
+      videoAsset: recording.video,
+      captureAsset: recording.video,
       title: contextLine,
       eyebrow: "RECORDING",
-      summary: "",
-      facts: [],
-      sections: [],
-      timeline: [],
-      permittedActions: [],
-    },
-  });
+    });
 
   return (
     <View style={{ gap: 12 }}>
@@ -283,44 +277,16 @@ export function FrameGrid({
               Auto-load on scroll
             </Txt>
           </Row>
-          <View
-            accessibilityRole="radiogroup"
-            accessibilityLabel="Tile size"
-            style={{
-              flexDirection: "row",
-              borderWidth: 1,
-              borderColor: c.border,
-              borderRadius: 8,
-              overflow: "hidden",
-            }}
-          >
-            {(Object.keys(DENSITY) as Density[]).map((key, i) => (
-              <Pressable
-                key={key}
-                accessibilityRole="radio"
-                accessibilityLabel={`${DENSITY[key].label} tiles`}
-                accessibilityState={{ checked: density === key }}
-                aria-checked={density === key}
-                onPress={() => setDensity(key)}
-                style={{
-                  paddingHorizontal: 11,
-                  paddingVertical: 7,
-                  borderLeftWidth: i ? 1 : 0,
-                  borderColor: c.border,
-                  backgroundColor:
-                    density === key ? c.actionPrimary : c.surface,
-                }}
-              >
-                <Txt
-                  size={12}
-                  bold={density === key}
-                  color={density === key ? c.actionInk : c.text}
-                >
-                  {DENSITY[key].label}
-                </Txt>
-              </Pressable>
-            ))}
-          </View>
+          <SegmentedControl
+            label="Tile size"
+            options={(Object.keys(DENSITY) as Density[]).map((key) => ({
+              value: key,
+              label: DENSITY[key].label,
+              accessibilityLabel: `${DENSITY[key].label} tiles`,
+            }))}
+            value={density}
+            onChange={setDensity}
+          />
           <IconButton
             name="top"
             label="Back to the first frame"
@@ -336,25 +302,14 @@ export function FrameGrid({
             {`Recording${first.recordings.length === 1 ? "" : "s"} in this slot:`}
           </Txt>
           {first.recordings.map((recording) => (
-            <Pressable
+            <Chip
               key={recording.key}
               testID="media-recording"
-              accessibilityRole="button"
+              compact
+              label={`${recording.name} · ${formatBytes(recording.size)}`}
               accessibilityLabel={`Play recording ${recording.name}`}
               onPress={() => setPlaying(recording)}
-              style={({ pressed, hovered }: any) => ({
-                paddingHorizontal: 10,
-                paddingVertical: 5,
-                borderRadius: 99,
-                borderWidth: 1,
-                borderColor: hovered ? c.link : c.border,
-                backgroundColor: pressed ? c.primarySoft : c.surface,
-              })}
-            >
-              <Txt size={12} color={c.link} lines={1}>
-                {`${recording.name} · ${formatBytes(recording.size)}`}
-              </Txt>
-            </Pressable>
+            />
           ))}
         </Row>
       )}
@@ -372,7 +327,9 @@ export function FrameGrid({
         }}
         // Only whole rows change what is mounted, so scrolling re-renders once per row.
         onScroll={(e) =>
-          setTop(Math.floor(e.nativeEvent.contentOffset.y / 48) * 48)
+          setTop(
+            Math.floor(e.nativeEvent.contentOffset.y / rowHeight) * rowHeight,
+          )
         }
         style={{
           height: viewport,
@@ -514,16 +471,7 @@ function FrameLightbox({
   const still = stillOf(frame);
   const source = mediaFrameSources[frame.file];
   const web = Platform.OS === "web";
-  useEffect(() => {
-    if (!web) return;
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.target as HTMLElement)?.tagName === "INPUT") return;
-      if (event.key === "ArrowRight") onStep(1);
-      else if (event.key === "ArrowLeft") onStep(-1);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [web, onStep]);
+  useArrowKeys(onStep);
   const openOriginal = () => {
     if (source)
       window.open(Asset.fromModule(source.full).uri, "_blank", "noopener");
@@ -550,7 +498,7 @@ function FrameLightbox({
                 aspectRatio: 16 / 9,
                 borderRadius: 10,
                 overflow: "hidden",
-                backgroundColor: "#071c2c",
+                backgroundColor: MEDIA_BG,
               }}
             >
               {source && (
@@ -564,39 +512,14 @@ function FrameLightbox({
               )}
             </View>
           )}
-          {[-1, 1].map((delta) => {
-            const disabled =
-              delta < 0 ? index === 0 : index === frames.length - 1;
-            return (
-              <Pressable
-                key={delta}
-                accessibilityRole="button"
-                accessibilityLabel={delta < 0 ? "Previous frame" : "Next frame"}
-                accessibilityState={{ disabled }}
-                disabled={disabled}
-                onPress={() => onStep(delta)}
-                style={({ pressed }) => ({
-                  position: "absolute",
-                  top: "50%",
-                  marginTop: -22,
-                  ...(delta < 0 ? { left: 8 } : { right: 8 }),
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: pressed
-                    ? "rgba(0,0,0,0.7)"
-                    : "rgba(0,0,0,0.45)",
-                  opacity: disabled ? 0.35 : 1,
-                })}
-              >
-                <View style={{ transform: [{ scaleX: delta < 0 ? -1 : 1 }] }}>
-                  <Icon name="chevron" size={22} color="#FFFFFF" />
-                </View>
-              </Pressable>
-            );
-          })}
+          <StepArrows
+            size={44}
+            labels={["Previous frame", "Next frame"]}
+            canStep={(delta) =>
+              delta < 0 ? index > 0 : index < frames.length - 1
+            }
+            onStep={onStep}
+          />
         </View>
         <Row
           style={{ flexWrap: "wrap", gap: 10, justifyContent: "space-between" }}
@@ -627,9 +550,7 @@ function FrameLightbox({
               icon="external"
               onPress={openOriginal}
             />
-            <Txt size={11} color={c.subtle}>
-              ← → to move · Esc to close
-            </Txt>
+            <KeyboardHint />
           </Row>
         )}
       </View>

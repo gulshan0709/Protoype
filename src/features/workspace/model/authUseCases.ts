@@ -3,7 +3,7 @@ export const authUseCases = [
     id: "enterprise",
     label: "Enterprise",
     shortLabel: "Enterprise",
-    source: require("../../../../assets/auth/surveillance-lobby-front.png"),
+    source: require("../../../../assets/auth/surveillance-lobby-front.jpg"),
     imageLabel:
       "Enterprise site entrance with people and cyan detection brackets",
     headline: "Every operation.",
@@ -18,7 +18,7 @@ export const authUseCases = [
     id: "education",
     label: "Education",
     shortLabel: "Education",
-    source: require("../../../../assets/auth/education-classroom-marked.png"),
+    source: require("../../../../assets/auth/education-classroom-marked.jpg"),
     imageLabel:
       "Eight students seated at classroom desks, each with a cyan detection marker",
     headline: "Every campus.",

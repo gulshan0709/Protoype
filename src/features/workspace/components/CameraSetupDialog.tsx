@@ -1,29 +1,31 @@
-import React, { useState } from "react";
 import { View } from "react-native";
-import type {
-  DataRecord,
-  PageContract,
-  Workspace,
-} from "../../../domain/contracts/types";
 import {
   cameraRecord,
   cameraFromRecord,
   hasCameraErrors,
   validateCamera,
   cameraSetupVariant,
+  CAMERA_ROW_TYPES,
   type CameraConfig,
 } from "../../../domain/cameras/setup";
 import {
-  storeAddedClasses,
-  storeEditedRecord,
   storeDeletedRecord,
+  storeSetupRecords,
 } from "../../../application/classSetupStore";
-import { useTheme } from "../../../shared/theme/Theme";
-import { Button, Row, Txt } from "../../../shared/ui/Primitives";
+import { Txt } from "../../../shared/ui/Primitives";
 import { Dialog } from "../../../shared/ui/Dialog";
-import { Select } from "../../../shared/ui/Select";
+import { ErrorText } from "../../../shared/ui/Form";
 import { AddCameraForm } from "./CameraForm";
-import type { ClassSetupRequest } from "./ClassSetupDialog";
+import type { SetupDialogProps } from "./setup/types";
+import { useSetupScope } from "./setup/useSetupScope";
+import {
+  DeleteConfirm,
+  RecordMenu,
+  ScopePicker,
+  SessionNotice,
+  setupTitle,
+} from "./setup/SetupDialogParts";
+
 export function CameraSetupDialog({
   request,
   onRequest,
@@ -35,40 +37,21 @@ export function CameraSetupDialog({
   storeKey,
   onClose,
   onSaved,
-}: {
-  request: ClassSetupRequest;
-  onRequest: (request: ClassSetupRequest) => void;
-  page: PageContract;
-  rows: DataRecord[];
-  workspace: Workspace;
-  scopes: string[];
-  actor: string;
-  storeKey: string;
-  onClose: () => void;
-  onSaved: (message: string) => void;
-}) {
-  const c = useTheme();
-  const variant = cameraSetupVariant(workspace, page.id) ?? "room";
-  const [scope, setScope] = useState(
-    workspace.scope === "Across campuses" ? "" : workspace.scope,
-  );
-  const [error, setError] = useState("");
+}: SetupDialogProps) {
+  const enabled = cameraSetupVariant(workspace, page.id);
+  const variant = enabled ?? "room";
   const target = rows.find((row) => row.id === request.recordId);
   const editing = request.mode === "edit";
+  const setup = useSetupScope({ workspace, scopes, target, editing });
   const allowed =
-    cameraSetupVariant(workspace, page.id) &&
-    (!request.recordId ||
-      (!!target &&
-        ["camera", "camera_source", "gate_camera"].includes(target.type)));
+    !!enabled &&
+    (!request.recordId || (!!target && CAMERA_ROW_TYPES.includes(target.type)));
   const save = (forms: CameraConfig[], source: string) => {
     if (!allowed || !forms.length || (editing && !target)) return;
-    if (!editing && !scopes.includes(scope)) {
-      setError("Choose the campus or academic scope first.");
-      return;
-    }
+    if (!setup.requireScope()) return;
     for (const form of forms) {
       if (hasCameraErrors(validateCamera(form, variant))) {
-        setError("Complete the required camera fields.");
+        setup.setError("Complete the required camera fields.");
         return;
       }
       const existing = rows
@@ -83,28 +66,22 @@ export function CameraSetupDialog({
           ),
         )
       ) {
-        setError("A camera with this ID already exists.");
+        setup.setError("A camera with this ID already exists.");
         return;
       }
     }
-    const recordScope =
-      target?.scope ??
-      (scopes.includes("Across campuses")
-        ? ["Across campuses", scope]
-        : [scope]);
     const records = forms.map((form) =>
       cameraRecord(
         page,
         form,
         variant,
-        recordScope,
+        setup.recordScope(),
         actor,
         source,
         editing ? target : undefined,
       ),
     );
-    if (editing) storeEditedRecord(storeKey, records[0]);
-    else storeAddedClasses(storeKey, records);
+    storeSetupRecords(storeKey, records, editing);
     onSaved(
       editing
         ? "Camera changes saved for this session."
@@ -113,73 +90,36 @@ export function CameraSetupDialog({
   };
   return (
     <Dialog
-      title={
-        request.mode === "menu"
-          ? "Camera actions"
-          : request.mode === "bulk"
-            ? "Bulk upload cameras"
-            : request.mode === "delete"
-              ? "Delete camera"
-              : editing
-                ? "Edit camera"
-                : "Add camera"
-      }
+      title={setupTitle(
+        request.mode,
+        { one: "camera", many: "cameras" },
+        "Camera actions",
+      )}
       onClose={onClose}
       wide={["add", "edit", "bulk"].includes(request.mode)}
     >
       {!allowed ? (
         <Txt>This action is not available in your current scope.</Txt>
       ) : request.mode === "menu" && target ? (
-        <View style={{ gap: 10 }}>
-          <Txt bold>{target.detail.title}</Txt>
-          <Button
-            label="Edit"
-            onPress={() => onRequest({ ...request, mode: "edit" })}
-          />
-          <Button
-            label="Delete"
-            onPress={() => onRequest({ ...request, mode: "delete" })}
-          />
-        </View>
+        <RecordMenu
+          target={target}
+          onPick={(mode) => onRequest({ ...request, mode })}
+        />
       ) : request.mode === "delete" && target ? (
-        <View style={{ gap: 14 }}>
-          <Txt>Delete {target.detail.title}?</Txt>
-          <Txt color={c.muted}>This removes the camera from this session.</Txt>
-          <Row style={{ justifyContent: "flex-end" }}>
-            <Button label="Cancel" onPress={onClose} />
-            <Button
-              label="Delete"
-              variant="primary"
-              onPress={() => {
-                storeDeletedRecord(storeKey, target.id);
-                onSaved("Camera removed from this session.");
-              }}
-            />
-          </Row>
-        </View>
+        <DeleteConfirm
+          title={target.detail.title}
+          note="This removes the camera from this session."
+          onCancel={onClose}
+          onConfirm={() => {
+            storeDeletedRecord(storeKey, target.id);
+            onSaved("Camera removed from this session.");
+          }}
+        />
       ) : (
         <View style={{ gap: 14 }}>
-          <Txt size={12} color={c.muted}>
-            Changes are kept for this session. The camera service is not
-            connected.
-          </Txt>
-          {!editing && workspace.scope === "Across campuses" && (
-            <Select
-              label="Campus"
-              value={scope}
-              options={[
-                { label: "Choose campus", value: "" },
-                ...scopes
-                  .filter((value) => value !== "Across campuses")
-                  .map((value) => ({ label: value, value })),
-              ]}
-              onChange={(value) => {
-                setScope(value);
-                setError("");
-              }}
-            />
-          )}
-          {!!error && <Txt color={c.critical}>{error}</Txt>}
+          <SessionNotice detail="The camera service is not connected." />
+          <ScopePicker scope={setup} />
+          <ErrorText size={14}>{setup.error}</ErrorText>
           <AddCameraForm
             variant={variant}
             initial={

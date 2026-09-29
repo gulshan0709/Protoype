@@ -1,26 +1,24 @@
-import React from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { light } from "../theme/Theme";
 import { BrandWordmark } from "./Icon";
 import { useLaunchMotion } from "../motion/useLaunchMotion";
 
+/** The branded launch overlay, shown above the app until it is ready. */
 export function LaunchScreen({
   ready = false,
   onDone,
-  overlay = false,
 }: {
   ready?: boolean;
   onDone?: () => void;
-  overlay?: boolean;
 }) {
   const { reduced, logo, shine, opacity } = useLaunchMotion(ready, onDone);
   return (
     <Animated.View
-      testID={overlay ? "launch-screen" : "workspace-loading"}
+      testID="launch-screen"
       accessibilityLabel="Loading Vizenta AI"
       accessibilityRole="progressbar"
       accessibilityState={{ busy: !ready }}
-      style={[styles.screen, overlay && styles.overlay, { opacity }]}
+      style={[styles.screen, styles.overlay, { opacity }]}
     >
       <Animated.View
         style={{

@@ -4,14 +4,12 @@ import {
   type DetectionKind,
 } from "../../../domain/contracts/detectionDemo";
 import { userIdentity } from "../../../domain/contracts/userIdentity";
-import {
-  demoGender,
-  demoPortrait,
-  portraitSource,
-} from "../../../shared/ui/demoPortrait";
+import { fnv1a } from "../../../domain/common/hash";
+import { demoGender, demoPortrait } from "../../../shared/ui/demoPortrait";
 import { demoStills, type DemoStill } from "./demoCaptures";
 import { useReducedMotion } from "../../../shared/motion/MotionProvider";
 import React, { useState, useEffect, useRef } from "react";
+import { DetectionBox, FaceCrop, MEDIA_BG } from "./mediaParts";
 import {
   Image,
   View,
@@ -42,11 +40,6 @@ const captureFor = (record: DataRecord) =>
   typeof record.captureAsset === "number" && typeof record.videoAsset === "number"
     ? captures[record.captureAsset]
     : undefined;
-const hash = (text: string) => {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
-  return h >>> 0;
-};
 /** One HD still per person (UID, else name), matching the demo gender when known. */
 export function stillFor(record: DataRecord): DemoStill | undefined {
   if (typeof record.captureAsset !== "number" || typeof record.videoAsset === "number")
@@ -55,7 +48,7 @@ export function stillFor(record: DataRecord): DemoStill | undefined {
   const gender = demoGender(person?.name, person?.image);
   const pool = gender ? demoStills.filter((s) => s.gender === gender) : demoStills;
   const key = person?.uid || person?.name || record.detail.title || record.id;
-  return pool[hash(key) % pool.length];
+  return pool[fnv1a(key) % pool.length];
 }
 const labelShadow = {
   textShadowColor: "rgba(16,32,48,0.95)",
@@ -74,7 +67,7 @@ export function CaptureFrame({
 }) {
   const [width, setWidth] = useState(0);
   const { color, label } = detectionStyles[kind];
-  const [x, y, w, h] = still.box;
+  const [x, y, w] = still.box;
   const font = Math.max(10, Math.min(18, width * 0.0146));
   const above = (y / 100) * (width * 0.5625) > font * 1.4 + 6;
   const right = x + w / 2 > 50;
@@ -86,7 +79,7 @@ export function CaptureFrame({
         aspectRatio: 16 / 9,
         borderRadius: 10,
         overflow: "hidden",
-        backgroundColor: "#071c2c",
+        backgroundColor: MEDIA_BG,
       }}
     >
       <Image
@@ -95,18 +88,7 @@ export function CaptureFrame({
         resizeMode="cover"
         style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%" }}
       />
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          left: `${x}%`,
-          top: `${y}%`,
-          width: `${w}%`,
-          height: `${h}%`,
-          borderWidth: Math.max(2, width / 480),
-          borderColor: color,
-        }}
-      />
+      <DetectionBox box={still.box} color={color} stroke={Math.max(2, width / 480)} />
       {width > 0 && (
         <Txt
           bold
@@ -143,7 +125,7 @@ function CaptureThumb({ still, kind }: { still: DemoStill; kind: DetectionKind }
         height: H,
         borderRadius: 9,
         overflow: "hidden",
-        backgroundColor: "#071c2c",
+        backgroundColor: MEDIA_BG,
       }}
     >
       <Image
@@ -217,7 +199,7 @@ export function MediaPlayer({ record }: { record: DataRecord }) {
             width: "100%",
             maxHeight: "65vh",
             borderRadius: 10,
-            backgroundColor: "#071c2c",
+            backgroundColor: MEDIA_BG,
           },
         })}
         <DetectionLegend />
@@ -275,7 +257,7 @@ function NativeMedia({
         aspectRatio: ratio,
         borderRadius: 10,
         overflow: "hidden",
-        backgroundColor: "#071c2c",
+        backgroundColor: MEDIA_BG,
       }}
     >
       {video && playing ? (
@@ -353,124 +335,84 @@ export function FaceCapture({
 }) {
   const c = useTheme();
   const reduced = useReducedMotion();
+  const inset = size * 0.13;
+  return (
+    <FaceCrop
+      // The person's own portrait at the drawn size (thumbnail or HD).
+      source={demoPortrait(uri, name, size)}
+      label="Face capture"
+      size={size}
+      radius={9}
+      background={c.primarySoft}
+      framing={framing}
+      lowLight={lowLight}
+      color={color}
+      bracket={{ inset, edge: size * 0.22, stroke: 2 }}
+    >
+      {!reduced && <ScanLine key={uri} color={color} travel={size - inset * 2} />}
+    </FaceCrop>
+  );
+}
+/** The scan line passing down a new capture, twice: 1.7 s down, then 0.8 s off. */
+function AnimatedScanLine({ color, travel }: { color: string; travel: number }) {
   const scan = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    scan.setValue(0);
-    if (reduced) return;
     const animation = Animated.loop(
       Animated.sequence([
-        Animated.timing(scan, {
-          toValue: 1,
-          duration: 1700,
-          useNativeDriver: Platform.OS !== "web",
-        }),
+        Animated.timing(scan, { toValue: 1, duration: 1700, useNativeDriver: true }),
         Animated.delay(800),
-        Animated.timing(scan, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: Platform.OS !== "web",
-        }),
+        Animated.timing(scan, { toValue: 0, duration: 0, useNativeDriver: true }),
       ]),
       { iterations: 2 },
     );
     animation.start();
     return () => animation.stop();
-  }, [scan, reduced, uri]);
-  const inset = size * 0.13;
-  const edge = size * 0.22;
+  }, [scan]);
   return (
-    <View
+    <Animated.View
       style={{
-        width: size,
-        height: size,
-        borderRadius: 9,
-        overflow: "hidden",
-        backgroundColor: c.primarySoft,
+        position: "absolute",
+        top: 0,
+        left: 2,
+        right: 2,
+        height: 1,
+        backgroundColor: color,
+        opacity: scan.interpolate({
+          inputRange: [0, 0.15, 0.85, 1],
+          outputRange: [0, 0.7, 0.7, 0],
+        }),
+        transform: [
+          { translateY: scan.interpolate({ inputRange: [0, 1], outputRange: [0, travel] }) },
+        ],
       }}
-    >
-      <Image
-        // The person's own portrait at the drawn size (thumbnail or HD).
-        source={
-          portraitSource(name ?? "", { image: uri, size }) ??
-          demoPortrait(uri, name)
-        }
-        accessibilityLabel="Face capture"
-        resizeMode="cover"
-        style={{
-          width: size,
-          height: size,
-          transform: framing
-            ? [
-                { translateX: framing.x * size },
-                { translateY: framing.y * size },
-                { scale: framing.scale },
-              ]
-            : undefined,
-        }}
-      />
-      {lowLight && (
-        <View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { backgroundColor: LOW_LIGHT }]}
-        />
-      )}
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          top: inset,
-          left: inset,
-          right: inset,
-          bottom: inset,
-        }}
-      >
-        {(["tl", "tr", "bl", "br"] as const).map((corner) => (
-          <View
-            key={corner}
-            style={{
-              position: "absolute",
-              width: edge,
-              height: edge,
-              borderColor: color,
-              ...(corner[0] === "t"
-                ? { top: 0, borderTopWidth: 2 }
-                : { bottom: 0, borderBottomWidth: 2 }),
-              ...(corner[1] === "l"
-                ? { left: 0, borderLeftWidth: 2 }
-                : { right: 0, borderRightWidth: 2 }),
-            }}
-          />
-        ))}
-        {!reduced && (
-          <Animated.View
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 2,
-              right: 2,
-              height: 1,
-              backgroundColor: color,
-              opacity: scan.interpolate({
-                inputRange: [0, 0.15, 0.85, 1],
-                outputRange: [0, 0.7, 0.7, 0],
-              }),
-              transform: [
-                {
-                  translateY: scan.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, size - inset * 2],
-                  }),
-                },
-              ],
-            }}
-          />
-        )}
-      </View>
-    </View>
+    />
   );
 }
-/** Tint for captures taken in the dark hours. */
-export const LOW_LIGHT = "rgba(4,16,34,0.34)";
+// Web runs the same scan as a CSS animation, so a page of thumbnails does not
+// drive it frame by frame from JavaScript. The fade keyframes sit where the
+// eased movement reaches 15% and 85% of the way.
+const SCAN_CSS = `
+@keyframes vizenta-scan-move { 0% { transform: translateY(0) } 68%, 100% { transform: translateY(var(--scan-travel)) } }
+@keyframes vizenta-scan-fade { 0% { opacity: 0 } 16.5%, 51.5% { opacity: .7 } 68%, 100% { opacity: 0 } }
+.vizenta-scan { position: absolute; top: 0; left: 2px; right: 2px; height: 1px; opacity: 0; pointer-events: none;
+  animation: vizenta-scan-move 2.5s ease-in-out 2, vizenta-scan-fade 2.5s linear 2; }
+`;
+let scanStyle: HTMLStyleElement | undefined;
+function CssScanLine({ color, travel }: { color: string; travel: number }) {
+  useEffect(() => {
+    if (scanStyle) return;
+    scanStyle = document.createElement("style");
+    scanStyle.textContent = SCAN_CSS;
+    document.head.appendChild(scanStyle);
+  }, []);
+  return (
+    <div
+      className="vizenta-scan"
+      style={{ background: color, "--scan-travel": `${travel}px` } as React.CSSProperties}
+    />
+  );
+}
+const ScanLine = Platform.OS === "web" ? CssScanLine : AnimatedScanLine;
 export function RecordMedia({
   record,
   onOpen,

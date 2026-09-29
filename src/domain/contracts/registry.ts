@@ -6,19 +6,13 @@ import { gateAttendance } from "./gateExtension";
 import surveillanceSamples from "../surveillance/samples.json";
 import { surveillanceUsers } from "./surveillanceExtension";
 import { mediaExplorer } from "./mediaExtension";
+import { vizentaAdminClasses } from "./classExtension";
 import { customerAdminLearners } from "./learnerExtension";
 import { familyOrder, orderByFamily } from "./priority";
 import { withDemoVolume, realisticContacts } from "./demoVolume";
 import { applyCorporateRows, type AuthoredRow } from "./corporateDemo";
-import corporateRows1 from "./corporate/rows-1.json";
-import corporateRows2 from "./corporate/rows-2.json";
-import corporateRows3 from "./corporate/rows-3.json";
-import corporateRows4 from "./corporate/rows-4.json";
-import education from "./data/education.json";
-import corporate from "./data/corporate.json";
-import retail from "./data/retail.json";
-import manufacturing from "./data/manufacturing.json";
 import { constructionIndustry, healthcareIndustry } from "./derivedIndustries";
+import corpora from "./data/corpora.cjs";
 import type {
   Industry,
   IndustryId,
@@ -26,54 +20,95 @@ import type {
   Location,
   DataRecord,
 } from "./types";
-export const industries = {
-  education,
-  corporate,
-  retail,
-  manufacturing,
-} as unknown as Record<IndustryId, Industry>;
-customerAdminLearners(industries.education.pages);
-gateAttendance(industries.education);
-wardenProduct(industries.education);
-sourcesAndSetup(industries.education);
-surveillanceUsers(
-  industries.education,
-  surveillanceSamples as unknown as Record<string, DataRecord[]>,
-);
-populateDemoData(industries.education);
-populateMediaDemo(industries.education);
-moveSurveillanceToShield(industries.education);
-mediaExplorer(industries.education);
-// Recognition users are managed from the consolidated People & Access directory.
-for (const [roleId, role] of Object.entries(industries.education.core.roles)) {
-  if (industries.education.pages[roleId]?.org["People & Access"]?.Users) {
-    role.organization = role.organization.filter((name) => name !== "Surveillance Users");
+
+/*
+ * Industries are built on first use: a session usually stays in one industry,
+ * and parsing and preparing all six corpora up front cost most of the start-up
+ * time (data/corpora.cjs evaluates a corpus only when it is first loaded). A
+ * derived industry is built together with its source, before any page of the
+ * source is expanded (withDemoVolume fills pages in place), exactly as if all
+ * of them were built at start.
+ */
+function educationIndustry(): Industry {
+  const education = corpora.education() as Industry;
+  customerAdminLearners(education.pages);
+  gateAttendance(education);
+  wardenProduct(education);
+  sourcesAndSetup(education);
+  surveillanceUsers(
+    education,
+    surveillanceSamples as unknown as Record<string, DataRecord[]>,
+  );
+  populateDemoData(education);
+  populateMediaDemo(education);
+  moveSurveillanceToShield(education);
+  mediaExplorer(education);
+  // Recognition users are managed from the consolidated People & Access directory.
+  for (const [roleId, role] of Object.entries(education.core.roles)) {
+    if (education.pages[roleId]?.org["People & Access"]?.Users) {
+      role.organization = role.organization.filter((name) => name !== "Surveillance Users");
+    }
   }
+  // Only education and retail carry placeholder contacts or copied wording (tests keep the others clean).
+  realisticContacts(education);
+  // People & Access reads learner pages directly, so fill them up front.
+  for (const [roleId, areas] of Object.entries(education.pages)) {
+    const learners = areas.product["Class & Lab Attendance"]?.Learners;
+    if (learners) withDemoVolume(learners, education, roleId, "Learners");
+  }
+  const learnerTabs =
+    education.core.productTabs.customer_admin["Class & Lab Attendance"];
+  if (!learnerTabs.includes("Learners"))
+    learnerTabs.splice(learnerTabs.indexOf("Mappings") + 1, 0, "Learners");
+  // After demo volume and contacts, so Vizenta Admin lists the same rows.
+  vizentaAdminClasses(education);
+  return education;
 }
-
-applyCorporateRows(industries.corporate, {
-  ...corporateRows1,
-  ...corporateRows2,
-  ...corporateRows3,
-  ...corporateRows4,
-} as unknown as Record<string, AuthoredRow[]>);
-industries.construction = constructionIndustry(industries.manufacturing);
-industries.healthcare = healthcareIndustry(industries.corporate);
-// Only these corpora carry placeholder contacts or copied wording (tests keep the others clean).
-realisticContacts(industries.education);
-realisticContacts(industries.retail);
-// People & Access reads learner pages directly, so fill them up front.
-for (const [roleId, areas] of Object.entries(industries.education.pages)) {
-  const learners = areas.product["Class & Lab Attendance"]?.Learners;
-  if (learners) withDemoVolume(learners, industries.education, roleId, "Learners");
+function corporateFamily() {
+  const corporate = corpora.corporate() as Industry;
+  applyCorporateRows(
+    corporate,
+    corpora.corporateRows() as Record<string, AuthoredRow[]>,
+  );
+  return { corporate, healthcare: healthcareIndustry(corporate) };
 }
-
-const learnerTabs =
-  industries.education.core.productTabs.customer_admin[
-    "Class & Lab Attendance"
-  ];
-if (!learnerTabs.includes("Learners"))
-  learnerTabs.splice(learnerTabs.indexOf("Mappings") + 1, 0, "Learners");
+function manufacturingFamily() {
+  const manufacturing = corpora.manufacturing() as Industry;
+  return {
+    manufacturing,
+    construction: constructionIndustry(manufacturing),
+  };
+}
+function retailIndustry(): Industry {
+  const retail = corpora.retail() as Industry;
+  realisticContacts(retail);
+  return retail;
+}
+const builders: Record<IndustryId, () => Partial<Record<IndustryId, Industry>>> = {
+  education: () => ({ education: educationIndustry() }),
+  corporate: corporateFamily,
+  retail: () => ({ retail: retailIndustry() }),
+  manufacturing: manufacturingFamily,
+  construction: manufacturingFamily,
+  healthcare: corporateFamily,
+};
+/** Every industry by id; each is built the first time it is read. */
+export const industries = {} as Record<IndustryId, Industry>;
+for (const id of Object.keys(builders) as IndustryId[])
+  Object.defineProperty(industries, id, {
+    enumerable: true,
+    configurable: true,
+    get() {
+      for (const [built, value] of Object.entries(builders[id]()))
+        Object.defineProperty(industries, built, {
+          value,
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
+      return industries[id];
+    },
+  });
 export const defaultWorkspace: Workspace = {
   industry: "education",
   role: "customer_admin",

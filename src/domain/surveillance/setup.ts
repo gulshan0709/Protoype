@@ -4,6 +4,10 @@ import type {
   PageContract,
   Workspace,
 } from "../contracts/types";
+import { fullName } from "../common/text";
+import { readUploadTable, type UploadRow } from "../common/upload";
+import { isEmail, isPhone, isRealDateTime } from "../common/validation";
+import { cellsFor, sessionEvent, sessionId } from "../contracts/sessionRecords";
 export const USER_TYPES = ["Identified", "Threat", "Visitor"];
 
 export const USER_COLUMNS = [
@@ -39,8 +43,6 @@ export const emptyUser = (): SurveillanceUser =>
     user_type: "Identified",
   }) as SurveillanceUser;
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const DATE_TIME = /^\d{4}-\d{2}-\d{2} ([01]\d|2[0-3]):[0-5]\d$/;
 export const isVisitor = (u: SurveillanceUser) => u.user_type === "Visitor";
 export const isThreat = (u: SurveillanceUser) => u.user_type === "Threat";
 
@@ -55,23 +57,19 @@ export function validateUser(
   if (!USER_TYPES.includes(u.user_type))
     e.user_type = `User type must be ${USER_TYPES.join(", ")}`;
   if (!isThreat(u) && !u.email.trim()) e.email = "Email is required";
-  else if (u.email && !EMAIL.test(u.email)) e.email = "Enter a valid email";
-  if (u.phone && !/^\+?\d{7,15}$/.test(u.phone.replace(/[\s-]/g, "")))
-    e.phone = "Use digits only";
+  else if (u.email && !isEmail(u.email)) e.email = "Enter a valid email";
+  if (u.phone && !isPhone(u.phone, 7)) e.phone = "Use digits only";
   if (isVisitor(u)) {
     if (!u.start_time) e.start_time = "Start time is required";
-    else if (!validDateTime(u.start_time))
+    else if (!isRealDateTime(u.start_time))
       e.start_time = "Use YYYY-MM-DD HH:MM";
     if (!u.end_time) e.end_time = "End time is required";
-    else if (!validDateTime(u.end_time)) e.end_time = "Use YYYY-MM-DD HH:MM";
+    else if (!isRealDateTime(u.end_time)) e.end_time = "Use YYYY-MM-DD HH:MM";
     else if (!e.start_time && u.end_time <= u.start_time)
       e.end_time = "End time must be after start time";
   }
   return e;
 }
-
-export const userName = (u: SurveillanceUser) =>
-  [u.first_name, u.last_name].filter(Boolean).join(" ");
 
 /** UIDs and emails already listed on the page. */
 export function listedIdentities(rows: DataRecord[]) {
@@ -84,73 +82,50 @@ export function listedIdentities(rows: DataRecord[]) {
   };
 }
 
-export type UserStatus = "Valid" | "Invalid" | "Duplicate" | "Existing";
-export interface UserRow {
-  key: number;
-  data: SurveillanceUser;
-  status: UserStatus;
-  message: string;
-}
-
 /** A face identity must be unique, so Invalid, Duplicate and Existing rows
  * all block saving (legacy upload rejected existing UIDs and emails). */
 export function checkUserUpload(
   table: string[][],
   existing: { uids: string[]; emails: string[] },
-): { rows: UserRow[]; error?: string } {
-  if (!table.length) return { rows: [], error: "The file is empty." };
-  const norm = (h: string) => h.trim().toLowerCase().replace(/\s+/g, "_");
-  const header = table[0].map(norm);
-  if (new Set(header).size !== header.length)
-    return { rows: [], error: "Duplicate column headers." };
-  const index = Object.fromEntries(
-    USER_COLUMNS.map((k) => [k, header.indexOf(k)]),
-  ) as Record<Column, number>;
-  const missing = (["uid", "first_name", "user_type"] as Column[]).filter(
-    (k) => index[k] < 0,
-  );
-  if (missing.length)
-    return {
-      rows: [],
-      error: `Missing template columns: ${missing.join(", ")}. Download the template and keep its header row.`,
-    };
+): { rows: UploadRow<SurveillanceUser>[]; error?: string } {
   const uids = new Set(existing.uids);
   const emails = new Set(existing.emails);
   const seenUid = new Set<string>();
   const seenEmail = new Set<string>();
-  const rows = table.slice(1).map((values, i): UserRow => {
-    const data = emptyUser();
-    for (const k of USER_COLUMNS)
-      data[k] = index[k] >= 0 ? (values[index[k]] ?? "").trim() : "";
+  return readUploadTable(table, {
+    columns: USER_COLUMNS,
+    required: ["uid", "first_name", "user_type"],
+    empty: emptyUser,
+    noun: "users",
     // Accept "visitor" / "THREAT" etc. from spreadsheets.
-    data.user_type =
-      USER_TYPES.find(
-        (t) => t.toLowerCase() === data.user_type.toLowerCase(),
-      ) ?? data.user_type;
-    const errors = Object.values(validateUser(data));
-    if (values.length !== header.length)
-      errors.push("Row has the wrong number of fields");
-    const uid = data.uid.toLowerCase();
-    const email = data.email.toLowerCase();
-    let status: UserStatus = "Valid";
-    let message = "Ready to add";
-    if (errors.length) {
-      status = "Invalid";
-      message = errors.join("; ");
-    } else if (seenUid.has(uid) || (email && seenEmail.has(email))) {
-      status = "Duplicate";
-      message = "UID or email appears more than once in this file";
-    } else if (uids.has(uid) || (email && emails.has(email))) {
-      status = "Existing";
-      message = "A user with this UID or email already exists";
-    }
-    seenUid.add(uid);
-    if (email) seenEmail.add(email);
-    return { key: i, data, status, message };
+    prepare: (data) => {
+      data.user_type =
+        USER_TYPES.find(
+          (t) => t.toLowerCase() === data.user_type.toLowerCase(),
+        ) ?? data.user_type;
+    },
+    validate: validateUser,
+    classify: (data, valid) => {
+      const uid = data.uid.toLowerCase();
+      const email = data.email.toLowerCase();
+      const verdict = !valid
+        ? undefined
+        : seenUid.has(uid) || (email && seenEmail.has(email))
+          ? {
+              status: "Duplicate" as const,
+              message: "UID or email appears more than once in this file",
+            }
+          : uids.has(uid) || (email && emails.has(email))
+            ? {
+                status: "Existing" as const,
+                message: "A user with this UID or email already exists",
+              }
+            : undefined;
+      seenUid.add(uid);
+      if (email) seenEmail.add(email);
+      return verdict;
+    },
   });
-  if (!rows.length)
-    return { rows, error: "The file has a header row but no users." };
-  return { rows };
 }
 
 /** Table record for the Surveillance Users page. */
@@ -162,33 +137,28 @@ export function userRecord(
   source: string,
   previous?: DataRecord,
 ): DataRecord {
-  const label = `${userName(u)} · ${u.uid}`;
+  const label = `${fullName(u)} · ${u.uid}`;
   const tone =
     u.user_type === "Threat"
       ? "critical"
       : u.user_type === "Visitor"
         ? "attention"
         : "healthy";
-  const byColumn: Record<string, string> = {
-    user: label,
-    email: u.email || "—",
-    phone: u.phone || "—",
-    type: u.user_type,
-    shift: isVisitor(u) ? `${u.start_time} → ${u.end_time}` : u.shift || "—",
-    group: u.camera_group || "All cameras",
-    image: u.image ? "Provided" : "Missing",
-    state: u.user_type,
-  };
   return {
-    id:
-      previous?.id ??
-      `NEW-USR-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    id: previous?.id ?? sessionId("USR"),
     type: "surveillance_user",
     setup: u,
     setupKind: "user",
-    cells: Object.fromEntries(
-      page.columns.map((col) => [col.id, byColumn[col.id] ?? "—"]),
-    ),
+    cells: cellsFor(page, {
+      user: label,
+      email: u.email || "—",
+      phone: u.phone || "—",
+      type: u.user_type,
+      shift: isVisitor(u) ? `${u.start_time} → ${u.end_time}` : u.shift || "—",
+      group: u.camera_group || "All cameras",
+      image: u.image ? "Provided" : "Missing",
+      state: u.user_type,
+    }),
     state: { label: u.user_type, tone },
     action: "Open user",
     scope,
@@ -225,7 +195,7 @@ export function userRecord(
         },
       ],
       timeline: [
-        { time: "Just now", event: source, actor },
+        sessionEvent(source, actor),
         ...(previous?.detail.timeline ?? []),
       ],
       permittedActions: [],
@@ -237,6 +207,8 @@ export function userRecord(
 export function userMetrics(rows: DataRecord[]): Metric[] {
   const users = rows.map((r) => r.setup as SurveillanceUser | undefined);
   const count = (t: string) => users.filter((u) => u?.user_type === t).length;
+  const threats = count("Threat");
+  const withoutImage = users.filter((u) => u && !u.image).length;
   return [
     {
       label: "Identified",
@@ -246,9 +218,9 @@ export function userMetrics(rows: DataRecord[]): Metric[] {
     },
     {
       label: "Threat",
-      value: String(count("Threat")),
+      value: String(threats),
       context: "Alert when recognised",
-      tone: count("Threat") ? "critical" : "healthy",
+      tone: threats ? "critical" : "healthy",
     },
     {
       label: "Visitor",
@@ -258,21 +230,13 @@ export function userMetrics(rows: DataRecord[]): Metric[] {
     },
     {
       label: "Without face image",
-      value: String(users.filter((u) => u && !u.image).length),
+      value: String(withoutImage),
       context: "Cannot be recognised yet",
-      tone: users.some((u) => u && !u.image) ? "attention" : "healthy",
+      tone: withoutImage ? "attention" : "healthy",
     },
   ];
 }
 
-function validDateTime(value: string) {
-  if (!DATE_TIME.test(value)) return false;
-  const date = new Date(value.replace(" ", "T") + ":00Z");
-  return (
-    !Number.isNaN(date.getTime()) &&
-    date.toISOString().slice(0, 16) === value.replace(" ", "T")
-  );
-}
 export function surveillanceEnabled(w: Workspace, pageId?: string) {
   return (
     w.industry === "education" &&

@@ -1,4 +1,13 @@
-import type { Cell, DataRecord } from "../contracts/types";
+import type { Cell, DataRecord, Industry } from "../contracts/types";
+import { cellTextOr } from "../contracts/logic";
+import { toCsv } from "../common/csv";
+import { fnv1a as hash } from "../common/hash";
+import {
+  hhmm as clock,
+  minutesOf,
+  MONTHS,
+  WEEKDAYS_SHORT as DAYS,
+} from "../common/time";
 
 /*
  * Per-learner attendance for one class or lab session, derived from the
@@ -43,36 +52,33 @@ export interface ClassSession {
   counts: Record<AttendanceStatus, number> & { total: number; attended: number };
 }
 
+/**
+ * Class and lab session rows of every education persona, so a view without its
+ * own count can borrow one (pass `industries.education`).
+ */
+export const sessionRows = (education: Pick<Industry, "pages">): DataRecord[] =>
+  Object.values(education.pages).flatMap((areas) =>
+    ["Classes", "Labs"].flatMap(
+      (tab) => areas.product["Class & Lab Attendance"]?.[tab]?.records ?? [],
+    ),
+  );
+
 /** Pages whose rows are class or lab sessions with a roster. */
 const sessionPages =
-  /^(ca-class-coverage|(dean|coordinator|faculty)-(classes|labs)|faculty-attendance-today)$/;
+  /^((ca|va)-class-coverage|(dean|coordinator|faculty)-(classes|labs)|faculty-attendance-today)$/;
 /** The demo corpus is a snapshot of Tue 15 Sep 2026 at 09:45. */
-export const SNAPSHOT_DAY = "Sep 15";
+const SNAPSHOT_DAY = "Sep 15";
 const SNAPSHOT_NOW = "09:45";
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const text = (value: Cell | undefined): string =>
-  value == null
-    ? ""
-    : typeof value === "object"
-      ? String(value.primary ?? value.label ?? value.value ?? "")
-      : String(value);
-function hash(value: string) {
-  let h = 2166136261;
-  for (let i = 0; i < value.length; i++) {
-    h ^= value.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
+const text = (value: Cell | undefined) => cellTextOr(value, "");
 
-// Same pools and formula as the class rosters in contracts/demoData.ts, so a
-// generated roster continues the mapped one without repeating a learner.
+// The class rosters' learners (contracts/demoData.ts maps the first ones onto
+// each class), so a generated roster continues the mapped one without repeating a learner.
 const firsts = ["Aarav", "Riya", "Kabir", "Ananya", "Arjun", "Priya", "Neha", "Dev", "Meera", "Rahul", "Isha", "Karan"];
 const lasts = ["Mehta", "Sharma", "Rao", "Das", "Nair", "Sen", "Patel", "Gupta"];
 const moreLasts = ["Iyer", "Menon", "Reddy", "Joshi", "Kapoor", "Bose", "Shah", "Verma"];
-function learnerAt(j: number) {
+/** The j-th learner of a class roster (UID 24031 + j). */
+export function rosterLearner(j: number) {
   const pool = j < firsts.length * lasts.length ? lasts : moreLasts;
   return {
     uid: String(24031 + j),
@@ -81,12 +87,6 @@ function learnerAt(j: number) {
   };
 }
 
-const clock = (minutes: number) =>
-  String(Math.floor(minutes / 60) % 24).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
-const minutesOf = (hhmm: string) => {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-};
 
 /** The session day and the four weekdays before it, newest first. */
 export function sessionDates(today = SNAPSHOT_DAY) {
@@ -216,8 +216,8 @@ export function classSession(
   const review = upcoming ? 0 : Math.min(lowConfidence, total - attended);
 
   const roster = Array.from({ length: total }, (_, j) => {
-    const l = mapped[j] ?? learnerAt(j);
-    return { uid: l.uid, name: l.name, email: l.email ?? learnerAt(j).email };
+    const l = mapped[j] ?? rosterLearner(j);
+    return { uid: l.uid, name: l.name, email: l.email ?? rosterLearner(j).email };
   });
   const order = roster
     .map((l) => ({ l, h: hash(key + "#" + l.uid) }))
@@ -321,8 +321,7 @@ export const STATUS_LABEL: Record<AttendanceStatus, string> = {
 
 /** CSV of the session roster (legacy column names), with formula prefixes escaped. */
 export function sessionCsv(session: ClassSession) {
-  const quote = (v: string) => '"' + (/^[=+\-@]/.test(v) ? "'" + v : v).replaceAll('"', '""') + '"';
-  return [
+  return toCsv([
     [
       "UID",
       "First Name",
@@ -350,7 +349,5 @@ export function sessionCsv(session: ClassSession) {
         l.confidence,
       ];
     }),
-  ]
-    .map((row) => row.map(quote).join(","))
-    .join("\r\n");
+  ]);
 }

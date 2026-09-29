@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { light, useTheme } from "../../shared/theme/Theme";
 import { Txt } from "../../shared/ui/Primitives";
@@ -17,6 +17,7 @@ export function PinPad({
   biometric,
   brand = false,
   resetKey,
+  avatar,
 }: {
   title: string;
   subtitle?: string;
@@ -27,10 +28,14 @@ export function PinPad({
   /** Navy lock-screen styling instead of the current surface theme. */
   brand?: boolean;
   resetKey?: unknown;
+  /** Shown above the title, e.g. the signed-in user's avatar. */
+  avatar?: React.ReactNode;
 }) {
   const c = useTheme();
   const [pin, setPin] = useState("");
   useEffect(() => setPin(""), [resetKey]);
+  const submitTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(submitTimer.current), []);
   const ink = brand ? light.sidebarText : c.text;
   const muted = brand ? light.sidebarMuted : c.muted;
   const keyBg = brand ? "rgba(255,255,255,0.1)" : c.primarySoft;
@@ -43,7 +48,7 @@ export function PinPad({
     setPin(next);
     if (next.length === PIN_LENGTH) {
       // Let the last dot render before verification clears the entry.
-      setTimeout(() => {
+      submitTimer.current = setTimeout(() => {
         setPin("");
         onComplete(next);
       }, 90);
@@ -52,6 +57,7 @@ export function PinPad({
   return (
     <View style={{ alignItems: "center", gap: 18, width: "100%" }}>
       <View style={{ alignItems: "center", gap: 4 }}>
+        {avatar && <View style={{ marginBottom: 8 }}>{avatar}</View>}
         <Txt size={18} bold color={ink} style={{ textAlign: "center" }}>
           {title}
         </Txt>

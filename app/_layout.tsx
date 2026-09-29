@@ -1,4 +1,3 @@
-import React from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppProvider } from "../src/application/AppProvider";
 import { useFonts } from "expo-font";

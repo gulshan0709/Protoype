@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Pressable, View } from "react-native";
 import type { PageContract } from "../../../domain/contracts/types";
 import {
@@ -7,8 +7,7 @@ import {
 } from "../../../domain/contracts/columns";
 import { useTheme } from "../../../shared/theme/Theme";
 import { Dialog } from "../../../shared/ui/Dialog";
-import { Icon } from "../../../shared/ui/Icon";
-import { Button, Row, Txt } from "../../../shared/ui/Primitives";
+import { Button, CheckboxBox, Row, Txt } from "../../../shared/ui/Primitives";
 
 export function ColumnPicker({
   page,
@@ -26,8 +25,10 @@ export function ColumnPicker({
     <>
       <Button
         compact
+        iconOnly
         label="Columns"
-        icon="settings"
+        tooltip="Choose columns"
+        icon="columns"
         onPress={() => setOpen(true)}
       />
       {open && (
@@ -53,7 +54,7 @@ export function ColumnPicker({
                         : [...selected, column.id],
                     )
                   }
-                  style={({ pressed, hovered }: any) => ({
+                  style={({ pressed, hovered }) => ({
                     minHeight: 44,
                     paddingHorizontal: 10,
                     borderRadius: 8,
@@ -64,22 +65,7 @@ export function ColumnPicker({
                       pressed || hovered ? c.primarySoft : c.surface,
                   })}
                 >
-                  <View
-                    style={{
-                      width: 19,
-                      height: 19,
-                      borderRadius: 4,
-                      borderWidth: 1,
-                      borderColor: checked ? c.actionPrimary : c.border,
-                      backgroundColor: checked ? c.actionPrimary : c.surface,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {checked && (
-                      <Icon name="check" size={13} color={c.actionInk} />
-                    )}
-                  </View>
+                  <CheckboxBox checked={checked} />
                   <Txt size={13} style={{ flex: 1 }}>
                     {column.label}
                   </Txt>

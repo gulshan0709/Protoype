@@ -14,6 +14,8 @@
  */
 import pool from "./framePool.json";
 import type { DetectionKind } from "../contracts/detectionDemo";
+import { unitHash as unit } from "../common/hash";
+import { addDays, minutesOf, MONTHS, pad } from "../common/time";
 
 export type MediaLevelKey = "org" | "camera" | "date" | "slot";
 export interface MediaLevel {
@@ -43,7 +45,7 @@ export interface MediaCustomer {
   /** The Vizenta Admin scope that may browse this customer. */
   scope: string;
 }
-export const mediaCustomers: readonly MediaCustomer[] = [
+const mediaCustomers: readonly MediaCustomer[] = [
   {
     folder: "org_1042",
     name: "Northbridge Education",
@@ -271,30 +273,7 @@ export const mediaCameras: readonly MediaCamera[] = [
 export const cameraFolder = (camera: MediaCamera) =>
   camera.ip.split(".").join("") + camera.port + camera.channel;
 
-// --- deterministic noise ------------------------------------------------------
-const hash = (text: string) => {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++)
-    h = Math.imul(h ^ text.charCodeAt(i), 16777619);
-  return h >>> 0;
-};
-const unit = (text: string) => hash(text) / 4294967296;
-
 // --- dates and times ------------------------------------------------------------
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
 const WEEKDAY_NAMES = [
   "Sunday",
   "Monday",
@@ -304,19 +283,14 @@ const WEEKDAY_NAMES = [
   "Friday",
   "Saturday",
 ];
-const pad = (n: number, width = 2) => String(n).padStart(width, "0");
 /** Local calendar day as the folder name, e.g. "20260928". */
-export const dayFolder = (d: Date) =>
+const dayFolder = (d: Date) =>
   `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
 const parseDay = (raw: string) => {
   const m = /^(\d{4})(\d{2})(\d{2})$/.exec(raw);
   if (!m) return undefined;
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   return dayFolder(d) === raw ? d : undefined;
-};
-const minutesOf = (hhmm: string) => {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + (m || 0);
 };
 const slotFolder = (minute: number) =>
   `${pad(Math.floor(minute / 60))}${pad(minute % 60)}00`;
@@ -327,15 +301,13 @@ const slotMinute = (raw: string) => {
   return minute < 24 * 60 && minute % SLOT_MINUTES === 0 ? minute : undefined;
 };
 /** 13:34:20 -> "1:34:20 PM"; seconds are optional. */
-export const clockLabel = (seconds: number, withSeconds = true) => {
+const clockLabel = (seconds: number, withSeconds = true) => {
   const whole = Math.floor(seconds);
   const h = Math.floor(whole / 3600) % 24;
   const m = Math.floor((whole % 3600) / 60);
   const s = whole % 60;
   return `${h % 12 || 12}:${pad(m)}${withSeconds ? ":" + pad(s) : ""} ${h < 12 ? "AM" : "PM"}`;
 };
-const addDays = (d: Date, days: number) =>
-  new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
 
 // --- activity model ------------------------------------------------------------
 // [from hour, share of a busy slot]. A busy slot holds about 1,300 frames.
@@ -440,7 +412,7 @@ export function slotFrameCount(
 }
 
 // --- scope and registry lookups -----------------------------------------------
-export function customersIn(scope: string) {
+function customersIn(scope: string) {
   // Unknown scopes see nothing; only the platform-wide scope sees every customer.
   return mediaCustomers.filter(
     (c) => scope === ALL_CUSTOMERS || c.scope === scope,
@@ -467,16 +439,32 @@ function slotsFor(camera: MediaCamera, date: string, now: Date) {
   }
   return out;
 }
+/** Whether the day folder exists: stops at the first slot with frames. */
+function hasSlots(camera: MediaCamera, date: string, now: Date) {
+  for (
+    let m = minutesOf(camera.start);
+    m < minutesOf(camera.end);
+    m += SLOT_MINUTES
+  )
+    if (slotFrameCount(camera, date, slotFolder(m), now) > 0) return true;
+  return false;
+}
 function datesFor(camera: MediaCamera, now: Date) {
   const out: string[] = [];
   for (let i = RETENTION_DAYS - 1; i >= 0; i--) {
     const date = dayFolder(addDays(now, -i));
-    if (slotsFor(camera, date, now).length) out.push(date);
+    if (hasSlots(camera, date, now)) out.push(date);
   }
   return out;
 }
+/** Whether the camera folder exists: stops at the newest day with frames. */
+function hasDates(camera: MediaCamera, now: Date) {
+  for (let i = 0; i < RETENTION_DAYS; i++)
+    if (hasSlots(camera, dayFolder(addDays(now, -i)), now)) return true;
+  return false;
+}
 const camerasFor = (org: string, now: Date) =>
-  mediaCameras.filter((c) => c.org === org && datesFor(c, now).length);
+  mediaCameras.filter((c) => c.org === org && hasDates(c, now));
 
 /** Folders under an already valid selection, in the store's (ascending) order. */
 function childrenOf(
@@ -735,7 +723,7 @@ export function slotFrames(
   return frames;
 }
 /** The recording kept beside the frames, when the slot's scene has one. */
-export function slotRecordings(
+function slotRecordings(
   camera: MediaCamera,
   date: string,
   slot: string,
@@ -815,7 +803,7 @@ export function mediaSummary(scope: string, now: Date) {
     (c) => camerasFor(c.folder, now).length,
   );
   const cameras = mediaCameras.filter(
-    (c) => customers.some((x) => x.folder === c.org) && datesFor(c, now).length,
+    (c) => customers.some((x) => x.folder === c.org) && hasDates(c, now),
   );
   return {
     customers: customers.length,

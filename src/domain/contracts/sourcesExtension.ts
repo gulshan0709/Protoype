@@ -1,21 +1,24 @@
-import type { Industry, PageContract } from "./types";
-type Rec = PageContract["records"][number];
+import type { DataRecord as Rec, Industry, PageContract } from "./types";
+import { str as text } from "../common/text";
+import {
+  acrossCampuses,
+  pageStates,
+  replaceEntries,
+  textColumns,
+} from "./pageBuilders";
 export function sourcesAndSetup(education: Industry) {
   const src = education.pages;
   const branch = src.customer_admin?.org["Sources & Setup"];
   if (!branch || branch.Setup) return;
-  const text = (v: unknown) => (typeof v === "string" ? v : "");
   const cameras: Rec[] = branch.Cameras?.records ?? [];
   const sources = branch.Cameras?.sources ?? [];
   const gate = src.security_admin?.product.Gate;
-  const states = (subject: string) => ({
-    empty: `No ${subject} match this scope and filter set.`,
-    degraded:
-      "A camera source is degraded; affected values are not treated as zero.",
-    notConfigured: "This view needs configured cameras.",
-    unauthorized: "Your role does not permit this view.",
-    insufficientHistory: "There is not enough history yet.",
-  });
+  const states = (subject: string) =>
+    pageStates(subject, {
+      degraded:
+        "A camera source is degraded; affected values are not treated as zero.",
+      notConfigured: "This view needs configured cameras.",
+    });
   const page = (
     id: string,
     heading: string,
@@ -33,11 +36,7 @@ export function sourcesAndSetup(education: Industry) {
       detailType,
       ...(recordLabel ? { recordLabel } : {}),
       metrics: [],
-      columns: columns.map(([cid, label]) => ({
-        id: cid,
-        label,
-        type: "text",
-      })),
+      columns: textColumns(columns),
       filters,
       records: structuredClone(records),
       sidePanels: [],
@@ -141,13 +140,7 @@ export function sourcesAndSetup(education: Industry) {
         } as Rec;
       },
     ),
-  ].map((r) => ({
-    ...r,
-    scope: [
-      "Across campuses",
-      ...r.scope.filter((x) => x !== "Across campuses"),
-    ],
-  }));
+  ].map((r) => ({ ...r, scope: acrossCampuses(r.scope) }));
 
   // Video Analytics: clip and frame references held as Shield evidence.
   const clips: Rec[] = (
@@ -174,10 +167,7 @@ export function sourcesAndSetup(education: Industry) {
           : "Reference only",
         state: r.cells.integrity,
       },
-      scope: [
-        "Across campuses",
-        ...r.scope.filter((x) => x !== "Across campuses"),
-      ],
+      scope: acrossCampuses(r.scope),
     } as Rec;
   });
 
@@ -319,8 +309,7 @@ export function sourcesAndSetup(education: Industry) {
   const rest = Object.fromEntries(
     Object.entries(branch).filter(([k]) => k !== "Cameras"),
   );
-  for (const key of Object.keys(branch)) delete branch[key];
-  Object.assign(branch, next, rest);
+  replaceEntries(branch, { ...next, ...rest });
 }
 
 /** Keep monitoring with Shield while retaining stable page IDs and preferences. */
@@ -343,7 +332,6 @@ export function moveSurveillanceToShield(education: Industry) {
     ([tab]) => !monitoring.includes(tab),
   );
   for (const tab of monitoring) delete setup[tab];
-  for (const tab of Object.keys(shield)) delete shield[tab];
-  Object.assign(shield, moved, Object.fromEntries(remaining));
+  replaceEntries(shield, { ...moved, ...Object.fromEntries(remaining) });
   education.core.productTabs.customer_admin.Shield = Object.keys(shield);
 }

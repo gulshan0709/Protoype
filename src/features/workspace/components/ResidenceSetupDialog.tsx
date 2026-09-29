@@ -1,29 +1,20 @@
-import React, { useState } from "react";
 import { View } from "react-native";
-import type {
-  DataRecord,
-  PageContract,
-  Workspace,
-} from "../../../domain/contracts/types";
+import type { DataRecord } from "../../../domain/contracts/types";
 import { industries } from "../../../domain/contracts/registry";
-import { scopedRecords, cellText } from "../../../domain/contracts/logic";
+import {
+  scopedRecords,
+  cellText,
+  isAggregateScope,
+} from "../../../domain/contracts/logic";
 import {
   applySetup,
-  useSetupState,
-  storeAddedClasses,
-  storeEditedRecord,
+  setupStoreKey,
   storeDeletedRecord,
+  storeSetupRecords,
+  useSetupState,
 } from "../../../application/classSetupStore";
-import { useTheme } from "../../../shared/theme/Theme";
-import { Button, Row, Txt } from "../../../shared/ui/Primitives";
-import { Dialog } from "../../../shared/ui/Dialog";
-import { Select } from "../../../shared/ui/Select";
-import type { ClassSetupRequest } from "./ClassSetupDialog";
-import { PersonOr } from "./PersonChip";
 import {
-  WardenForm,
-  HostelForm,
-  LeaveForm,
+  residenceSetupEnabled,
   wardenFromRecord,
   hostelFromRecord,
   leaveFromRecord,
@@ -31,7 +22,21 @@ import {
   hostelRecord,
   leaveRecord,
   leaveEditable,
-} from "./WardenSetup";
+} from "../../../domain/residence/setup";
+import { Txt } from "../../../shared/ui/Primitives";
+import { Dialog } from "../../../shared/ui/Dialog";
+import { ErrorText } from "../../../shared/ui/Form";
+import { WardenForm, HostelForm, LeaveForm } from "./WardenSetup";
+import type { SetupDialogProps } from "./setup/types";
+import { useSetupScope } from "./setup/useSetupScope";
+import {
+  DeleteConfirm,
+  RecordMenu,
+  ScopePicker,
+  SessionNotice,
+  setupTitle,
+} from "./setup/SetupDialogParts";
+
 export function ResidenceSetupDialog({
   request,
   onRequest,
@@ -43,34 +48,22 @@ export function ResidenceSetupDialog({
   storeKey,
   onClose,
   onSaved,
-}: {
-  request: ClassSetupRequest;
-  onRequest: (request: ClassSetupRequest) => void;
-  page: PageContract;
-  rows: DataRecord[];
-  workspace: Workspace;
-  scopes: string[];
-  actor: string;
-  storeKey: string;
-  onClose: () => void;
-  onSaved: (message: string) => void;
-}) {
-  const c = useTheme();
+}: SetupDialogProps) {
   const state = useSetupState();
-  const aggregate = ["Across campuses", "All customers"].includes(
-    workspace.scope,
-  );
-  const [scope, setScope] = useState(aggregate ? "" : workspace.scope);
-  const [error, setError] = useState("");
   const kind = page.detailType;
   const target = rows.find((row) => row.id === request.recordId);
   const editing = request.mode === "edit";
+  const setup = useSetupScope({ workspace, scopes, target, editing });
   const allowed =
-    workspace.industry === "education" &&
-    ["customer_admin", "vizenta_admin"].includes(workspace.role) &&
-    /^(ca|va)-warden-(wardens|hostels|leaves)$/.test(page.id) &&
+    residenceSetupEnabled(workspace, page.id) &&
     (!request.recordId || !!target) &&
     !(target && kind === "leave" && !leaveEditable(target));
+  // Hostels, wardens and students offered by the forms: the record's place,
+  // else the chosen scope, else the workspace's.
+  const relatedScope =
+    target?.scope.find((s) => !isAggregateScope(s)) ||
+    setup.scope ||
+    workspace.scope;
   const related = (tab: string) => {
     const p =
       industries[workspace.industry].pages[workspace.role].product.Warden?.[
@@ -79,45 +72,23 @@ export function ResidenceSetupDialog({
     if (!p) return [];
     return applySetup(
       state,
-      JSON.stringify([workspace.industry, workspace.role, p.id]),
-      target?.scope.find(
-        (s) => !["Across campuses", "All customers"].includes(s),
-      ) ||
-        scope ||
-        workspace.scope,
-      scopedRecords(
-        p,
-        target?.scope.find(
-          (s) => !["Across campuses", "All customers"].includes(s),
-        ) ||
-          scope ||
-          workspace.scope,
-      ),
+      setupStoreKey(workspace, p.id),
+      relatedScope,
+      scopedRecords(p, relatedScope),
     );
   };
+  // Other records only: the one being edited may keep its own name or email.
+  const others = rows.filter((r) => r.id !== target?.id);
   const save = (build: (scope: string[]) => DataRecord) => {
     if (!allowed) return;
-    if (!editing && !scopes.includes(scope)) {
-      setError("Choose a scope first.");
-      return;
-    }
-    const record = build(
-      target?.scope ?? (aggregate ? [workspace.scope, scope] : [scope]),
-    );
-    if (editing) storeEditedRecord(storeKey, record);
-    else storeAddedClasses(storeKey, [record]);
+    if (!setup.requireScope("Choose a scope first.")) return;
+    storeSetupRecords(storeKey, [build(setup.recordScope())], editing);
     onSaved("Changes saved for this session.");
   };
   const actorEvent = editing ? "Configuration updated" : "Record created";
   return (
     <Dialog
-      title={
-        request.mode === "menu"
-          ? "Record actions"
-          : request.mode === "delete"
-            ? "Delete " + kind
-            : (editing ? "Edit " : "Add ") + kind
-      }
+      title={setupTitle(request.mode, { one: kind })}
       onClose={onClose}
       wide={["add", "edit"].includes(request.mode)}
     >
@@ -127,66 +98,37 @@ export function ResidenceSetupDialog({
           can be changed.
         </Txt>
       ) : request.mode === "menu" && target ? (
-        <View style={{ gap: 10 }}>
-          <PersonOr record={target}>
-            <Txt bold>{target.detail.title}</Txt>
-          </PersonOr>
-          <Button
-            label="Edit"
-            onPress={() => onRequest({ ...request, mode: "edit" })}
-          />
-          <Button
-            label="Delete"
-            onPress={() => onRequest({ ...request, mode: "delete" })}
-          />
-        </View>
+        <RecordMenu
+          target={target}
+          person
+          onPick={(mode) => onRequest({ ...request, mode })}
+        />
       ) : request.mode === "delete" && target ? (
-        <View style={{ gap: 14 }}>
-          <Txt>Delete {target.detail.title}?</Txt>
-          <Txt color={c.muted}>This removes the record from this session.</Txt>
-          <Row>
-            <Button label="Cancel" onPress={onClose} />
-            <Button
-              label="Delete"
-              variant="primary"
-              onPress={() => {
-                storeDeletedRecord(storeKey, target.id);
-                onSaved("Record removed from this session.");
-              }}
-            />
-          </Row>
-        </View>
+        <DeleteConfirm
+          title={target.detail.title}
+          note="This removes the record from this session."
+          align="start"
+          onCancel={onClose}
+          onConfirm={() => {
+            storeDeletedRecord(storeKey, target.id);
+            onSaved("Record removed from this session.");
+          }}
+        />
       ) : (
         <View style={{ gap: 14 }}>
-          <Txt size={12} color={c.muted}>
-            Changes are kept for this session.
-          </Txt>
-          {!editing && aggregate && (
-            <Select
-              label="Scope"
-              value={scope}
-              options={[
-                { label: "Choose scope", value: "" },
-                ...scopes
-                  .filter(
-                    (s) => !["Across campuses", "All customers"].includes(s),
-                  )
-                  .map((value) => ({ label: value, value })),
-              ]}
-              onChange={setScope}
-            />
-          )}
-          {!!error && <Txt color={c.critical}>{error}</Txt>}
+          <SessionNotice />
+          <ScopePicker scope={setup} label="Scope" placeholder="Choose scope" />
+          <ErrorText size={14}>{setup.error}</ErrorText>
           {kind === "warden" ? (
             <WardenForm
-              key={scope}
+              key={setup.scope}
               initial={editing && target ? wardenFromRecord(target) : undefined}
               hostelOptions={related("Hostels").map((r) =>
                 cellText(r.cells.hostel),
               )}
-              takenEmails={rows
-                .filter((r) => r.id !== target?.id)
-                .map((r) => cellText(r.cells.email).trim().toLowerCase())}
+              takenEmails={others.map((r) =>
+                cellText(r.cells.email).trim().toLowerCase(),
+              )}
               submitLabel={editing ? "Save changes" : "Add warden"}
               onCancel={onClose}
               onSave={(form) =>
@@ -197,14 +139,14 @@ export function ResidenceSetupDialog({
             />
           ) : kind === "hostel" ? (
             <HostelForm
-              key={scope}
+              key={setup.scope}
               initial={editing && target ? hostelFromRecord(target) : undefined}
               wardenOptions={related("Wardens")
                 .filter((r) => r.cells.designation !== "Sub Admin")
                 .map((r) => cellText(r.cells.warden))}
-              takenNames={rows
-                .filter((r) => r.id !== target?.id)
-                .map((r) => cellText(r.cells.hostel).trim().toLowerCase())}
+              takenNames={others.map((r) =>
+                cellText(r.cells.hostel).trim().toLowerCase(),
+              )}
               submitLabel={editing ? "Save changes" : "Add hostel"}
               onCancel={onClose}
               onSave={(form) =>
@@ -215,7 +157,7 @@ export function ResidenceSetupDialog({
             />
           ) : (
             <LeaveForm
-              key={scope}
+              key={setup.scope}
               initial={editing && target ? leaveFromRecord(target) : undefined}
               students={[
                 ...new Set(

@@ -1,4 +1,12 @@
 // Person-name detection for demo data. Pure: no React Native imports, so node tests can load it.
+import { fnv1a } from "../../domain/common/hash";
+import {
+  INDIAN_FEMALE,
+  INDIAN_LAST,
+  INDIAN_MALE,
+  WESTERN_FEMALE,
+  WESTERN_MALE,
+} from "../../domain/common/names";
 export type PersonGender = "man" | "woman";
 export type PersonLook = "south-asian" | "international";
 export interface PersonName {
@@ -22,21 +30,7 @@ export interface PersonName {
  */
 const words = (text: string) => text.trim().split(/\s+/);
 
-// Mirrors the name pools in src/domain/contracts/demoVolume.ts (the tests keep them in sync).
-const INDIAN_FEMALE = words(
-  "Aanya Aditi Ananya Anjali Asha Avni Diya Divya Gauri Ira Isha Ishita Kavya Kiara Meera Mira Naina Neha Nisha Pooja Priya Riya Saanvi Sana Shreya Sneha Tanvi Tara Trisha Anika Pallavi Ritika Sakshi Simran Swati Nandini Kriti Megha Kavita Anita Anaya Devika Lakshmi Radhika Shruti",
-);
-const INDIAN_MALE = words(
-  "Aarav Aditya Akash Amit Arjun Aryan Dev Dhruv Harsh Ishaan Kabir Karan Krish Manav Nikhil Pranav Rahul Rohan Sahil Sameer Siddharth Varun Vihaan Vikram Yash Ayaan Rishi Kunal Tushar Nitin Rajat Gaurav Abhinav Ankit Mohit Ravi Arun Deepak Suresh Manish Sanjay Imran Farhan",
-);
-const INDIAN_LAST = words(
-  "Sharma Verma Gupta Mehta Patel Shah Rao Nair Iyer Menon Reddy Das Sen Bose Joshi Kulkarni Deshpande Pillai Kapoor Malhotra Chopra Singh Chauhan Agarwal Bansal Saxena Mishra Pandey Tiwari Banerjee Chatterjee Ghosh Naidu Hegde Kamath Shetty Bhat Rathore Yadav Khanna Arora Sethi Dutta Krishnan Varghese Thomas Fernandes Khan Qureshi Siddiqui Desai Kumar Joseph",
-);
-const WESTERN_FEMALE = words("Maya Lena Lina Emma Olivia Sofia Grace Hannah Chloe Nora Ava Leah Zoe Ruby Claire Julia");
-const WESTERN_MALE = words(
-  "Owen Liam Noah Ethan Lucas Daniel Marcus Ryan Adam Caleb Nathan Julian Leo Miles Isaac Oscar",
-);
-
+// The demo name pools come from src/domain/common/names.ts.
 // Further South Asian names, for rows added during a session and authored corpora.
 const MORE_SOUTH_ASIAN_FEMALE = words(
   "Aadhya Aarohi Aarti Aishwarya Akanksha Amrita Anushka Aparna Archana Bhavna Chitra Deepa Deepika Garima Geeta Hema Ishani Jaya Jyoti Kajal Kamala Komal Kritika Latha Madhu Manisha Mansi Myra Nalini Navya Nidhi Padma Palak Payal Poonam Preeti Priyanka Rashmi Rekha Renu Riddhi Rupa Sanjana Sapna Seema Sejal Shalini Sheela Shilpa Shweta Siya Smita Sonal Sonia Sunita Suman Uma Usha Vaishnavi Vandana Vidya Yamini Zoya",
@@ -85,19 +79,11 @@ export function firstNameGender(first: string): PersonGender | undefined {
   return women.has(first) ? "woman" : men.has(first) ? "man" : undefined;
 }
 
-function hash(text: string) {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
 /**
  * A person when the text is a (possibly titled) name, optionally followed by " · UID";
- * undefined for organisations, roles and places. Every person has a gender and a look:
- * from the first name, or for initial forms ("K. Nair") a stable pick from the name.
+ * undefined for organisations, roles and places. A person has a look and usually a gender:
+ * from the first name, or for initial forms ("K. Nair") a stable pick from the name. An
+ * unlisted first name before known surnames ("Gulshan Kumar") has no gender.
  */
 export function parsePersonName(text: string): PersonName | undefined {
   const [head = "", suffix] = String(text ?? "")
@@ -119,11 +105,60 @@ export function parsePersonName(text: string): PersonName | undefined {
   } else if (INITIAL.test(first) && tokens.length === 2 && surnameOk(last)) {
     // "K. Nair": the first name is unknown, so the demo picks a gender from the whole name
     // (the same name always gets the same one); the look follows the surname.
-    gender = (hash(name) >>> 7) % 2 ? "woman" : "man";
+    gender = (fnv1a(name) >>> 7) % 2 ? "woman" : "man";
     look = southAsianLast.has(last) ? "south-asian" : "international";
+  } else if (surnameOk(first) && [...middle, last].every((w) => southAsianLast.has(w))) {
+    // "Gulshan Kumar": a first name outside the lists with a known surname is still a
+    // person. Without a gender there is no pool portrait, so the avatar shows initials.
+    look = "south-asian";
   } else return undefined;
   const id = suffix?.replace(/^(?:UID|Badge)\s*/i, "");
-  const person: PersonName = { name, initials: (first[0] + last[0]).toUpperCase(), gender, look };
+  const person: PersonName = { name, initials: (first[0] + last[0]).toUpperCase(), look };
+  if (gender) person.gender = gender;
   if (id && ID_SUFFIX.test(id)) person.uid = id;
   return person;
+}
+
+/** Role titles that name a person together with a surname ("Warden Rao"). */
+const ROLE_TITLES = new Set(words("Warden Officer Guard Supervisor Nurse Coach Inspector"));
+
+/**
+ * A person named by role and surname ("Warden Rao", "Warden Iyer · Hostel C"): a role
+ * title plus a known surname. It has no gender or portrait, so the avatar shows initials.
+ * parsePersonName keeps rejecting these, so the portrait scan never sees them.
+ */
+export function parseTitledPerson(text: string): PersonName | undefined {
+  const [head = "", suffix] = String(text ?? "")
+    .trim()
+    .split(/\s+·\s+/);
+  const tokens = words(head);
+  if (tokens.length !== 2 || !ROLE_TITLES.has(tokens[0]) || !southAsianLast.has(tokens[1])) return undefined;
+  const person: PersonName = { name: tokens.join(" "), initials: tokens[1][0].toUpperCase(), look: "south-asian" };
+  const id = suffix?.replace(/^(?:UID|Badge)\s*/i, "");
+  if (id && ID_SUFFIX.test(id)) person.uid = id;
+  return person;
+}
+
+/**
+ * Avatar initials for any name, person or not: the first letters of the first and
+ * last words, without honorific, role title or " · UID" ("Dr. Gulshan Kumar · E1001"
+ * → "GK", "Warden Rao" → "R", "gulshan" → "G"). Empty when the text has no letters.
+ */
+export function nameInitials(text: string): string {
+  const head = String(text ?? "").trim().split(/\s+·\s+/)[0].replace(HONORIFIC, "");
+  const tokens = words(head);
+  if (tokens.length > 1 && ROLE_TITLES.has(tokens[0])) tokens.shift();
+  // A single handle splits on its separators: "gulshan.kumar" → "GK".
+  const parts = tokens.length === 1 ? tokens[0].split(/[._+-]+/) : tokens;
+  const letters = parts.map((word) => /\p{L}/u.exec(word)?.[0] ?? "").filter(Boolean);
+  if (!letters.length) return "";
+  return (letters[0] + (letters.length > 1 ? letters[letters.length - 1] : "")).toLocaleUpperCase();
+}
+
+/** A display name from an email's local part: "gulshan.kumar@reslt.ai" → "Gulshan Kumar". */
+export function nameFromEmail(email: string): string {
+  const local = String(email ?? "").trim().split("@")[0];
+  const parts = local.split(/[._+-]+/).filter((part) => /\p{L}/u.test(part));
+  if (!parts.length) return local;
+  return parts.map((part) => part[0].toLocaleUpperCase() + part.slice(1)).join(" ");
 }

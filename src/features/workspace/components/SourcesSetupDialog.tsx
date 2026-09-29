@@ -1,28 +1,31 @@
-import React, { useState } from "react";
 import { View } from "react-native";
-import type {
-  DataRecord,
-  PageContract,
-  Workspace,
-} from "../../../domain/contracts/types";
+import type { DataRecord } from "../../../domain/contracts/types";
 import {
-  storeAddedClasses,
-  storeEditedRecord,
   storeDeletedRecord,
+  storeSetupRecords,
 } from "../../../application/classSetupStore";
-import { useTheme } from "../../../shared/theme/Theme";
-import { Button, Row, Txt } from "../../../shared/ui/Primitives";
-import { Dialog } from "../../../shared/ui/Dialog";
-import { Select } from "../../../shared/ui/Select";
-import type { ClassSetupRequest } from "./ClassSetupDialog";
 import {
-  SetupCameraForm,
-  ShiftForm,
-  setupCameraRecord,
   setupCameraFromRecord,
-  shiftRecord,
+  setupCameraRecord,
   shiftFromRecord,
-} from "./SetupTabs";
+  shiftRecord,
+  sourcesSetupEnabled,
+} from "../../../domain/sources/setup";
+import { Txt } from "../../../shared/ui/Primitives";
+import { Dialog } from "../../../shared/ui/Dialog";
+import { ErrorText } from "../../../shared/ui/Form";
+import { SetupCameraForm } from "./setup/SetupCameraForm";
+import { ShiftForm } from "./setup/ShiftForm";
+import type { SetupDialogProps } from "./setup/types";
+import { useSetupScope } from "./setup/useSetupScope";
+import {
+  DeleteConfirm,
+  RecordMenu,
+  ScopePicker,
+  SessionNotice,
+  setupTitle,
+} from "./setup/SetupDialogParts";
+
 export function SourcesSetupDialog({
   request,
   onRequest,
@@ -34,43 +37,21 @@ export function SourcesSetupDialog({
   storeKey,
   onClose,
   onSaved,
-}: {
-  request: ClassSetupRequest;
-  onRequest: (request: ClassSetupRequest) => void;
-  page: PageContract;
-  rows: DataRecord[];
-  workspace: Workspace;
-  scopes: string[];
-  actor: string;
-  storeKey: string;
-  onClose: () => void;
-  onSaved: (message: string) => void;
-}) {
-  const c = useTheme();
-  const [scope, setScope] = useState(
-    workspace.scope === "Across campuses" ? "" : workspace.scope,
-  );
-  const [error, setError] = useState("");
+}: SetupDialogProps) {
   const target = rows.find((r) => r.id === request.recordId);
   const editing = request.mode === "edit";
+  const setup = useSetupScope({ workspace, scopes, target, editing });
   const camera = page.id === "ca-setup-cameras";
   const name = camera ? "camera" : "shift";
   const allowed =
-    workspace.industry === "education" &&
-    workspace.role === "customer_admin" &&
-    ["ca-setup-cameras", "ca-setup-shifts"].includes(page.id) &&
-    (!request.recordId || !!target);
+    sourcesSetupEnabled(workspace, page.id) && (!request.recordId || !!target);
   const save = (build: (scope: string[]) => DataRecord[]) => {
     if (!allowed) return;
-    if (!editing && !scopes.includes(scope)) {
-      setError("Choose a campus first.");
-      return;
-    }
-    const records = build(target?.scope ?? ["Across campuses", scope]);
-    if (editing) storeEditedRecord(storeKey, records[0]);
-    else storeAddedClasses(storeKey, records);
+    if (!setup.requireScope("Choose a campus first.")) return;
+    storeSetupRecords(storeKey, build(setup.recordScope()), editing);
     onSaved("Changes saved for this session.");
   };
+  // Other records only: the one being edited may keep its own name.
   const taken = rows
     .filter((r) => r.id !== target?.id)
     .map((r) =>
@@ -80,64 +61,32 @@ export function SourcesSetupDialog({
     );
   return (
     <Dialog
-      title={
-        request.mode === "menu"
-          ? "Record actions"
-          : request.mode === "delete"
-            ? "Delete " + name
-            : (editing ? "Edit " : "Add ") + name
-      }
+      title={setupTitle(request.mode, { one: name })}
       wide={["add", "edit"].includes(request.mode)}
       onClose={onClose}
     >
       {!allowed ? (
         <Txt>This action is unavailable in the current scope.</Txt>
       ) : request.mode === "menu" && target ? (
-        <View style={{ gap: 10 }}>
-          <Txt bold>{target.detail.title}</Txt>
-          <Button
-            label="Edit"
-            onPress={() => onRequest({ ...request, mode: "edit" })}
-          />
-          <Button
-            label="Delete"
-            onPress={() => onRequest({ ...request, mode: "delete" })}
-          />
-        </View>
+        <RecordMenu
+          target={target}
+          onPick={(mode) => onRequest({ ...request, mode })}
+        />
       ) : request.mode === "delete" && target ? (
-        <View style={{ gap: 14 }}>
-          <Txt>Delete {target.detail.title}?</Txt>
-          <Row>
-            <Button label="Cancel" onPress={onClose} />
-            <Button
-              label="Delete"
-              variant="primary"
-              onPress={() => {
-                storeDeletedRecord(storeKey, target.id);
-                onSaved("Record removed from this session.");
-              }}
-            />
-          </Row>
-        </View>
+        <DeleteConfirm
+          title={target.detail.title}
+          align="start"
+          onCancel={onClose}
+          onConfirm={() => {
+            storeDeletedRecord(storeKey, target.id);
+            onSaved("Record removed from this session.");
+          }}
+        />
       ) : (
         <View style={{ gap: 14 }}>
-          <Txt size={12} color={c.muted}>
-            Changes are kept for this session.
-          </Txt>
-          {!editing && workspace.scope === "Across campuses" && (
-            <Select
-              label="Campus"
-              value={scope}
-              options={[
-                { label: "Choose campus", value: "" },
-                ...scopes
-                  .filter((s) => s !== "Across campuses")
-                  .map((value) => ({ label: value, value })),
-              ]}
-              onChange={setScope}
-            />
-          )}
-          {!!error && <Txt color={c.critical}>{error}</Txt>}
+          <SessionNotice />
+          <ScopePicker scope={setup} />
+          <ErrorText size={14}>{setup.error}</ErrorText>
           {camera ? (
             <SetupCameraForm
               initial={
@@ -147,7 +96,9 @@ export function SourcesSetupDialog({
               locations={[
                 ...new Set(
                   rows
-                    .filter((r) => !scope || r.scope.includes(scope))
+                    .filter(
+                      (r) => !setup.scope || r.scope.includes(setup.scope),
+                    )
                     .map((r) => String(r.cells.location)),
                 ),
               ]}

@@ -18,6 +18,8 @@ import Svg, { Circle, Path } from "react-native-svg";
 import { StatusBar } from "expo-status-bar";
 import { useApp } from "../../../application/AppProvider";
 import { Icon } from "../../../shared/ui/Icon";
+import { CheckboxBox } from "../../../shared/ui/Primitives";
+import { nameFromEmail } from "../../../shared/people/personName";
 import { AuthBrandPanel } from "./AuthBrandPanel";
 import { useAuthShowcase } from "../hooks/useAuthShowcase";
 import { AuthContent } from "./AuthContent";
@@ -284,8 +286,7 @@ export function Login({ mode = "login" }: { mode?: Mode }) {
     app.update({
       session: true,
       rememberSession: remember,
-      name:
-        fields.first.trim() || fields.email.trim().split("@")[0] || app.name,
+      name: fields.first.trim() || nameFromEmail(fields.email) || app.name,
     });
     // Keep a requested workspace view when login is shown by its session gate.
     if (pathname !== "/") router.replace("/");
@@ -566,19 +567,13 @@ export function Login({ mode = "login" }: { mode?: Mode }) {
                         onPress={() => setRemember(!remember)}
                         style={s.remember}
                       >
-                        <View
-                          style={[
-                            s.checkbox,
-                            {
-                              backgroundColor: remember ? accent : "#fff",
-                              borderColor: remember ? accent : "#bfc3ce",
-                            },
-                          ]}
-                        >
-                          {remember && (
-                            <Icon name="check" size={13} color="#fff" />
-                          )}
-                        </View>
+                        <CheckboxBox
+                          checked={remember}
+                          size={17}
+                          color={accent}
+                          border="#bfc3ce"
+                          background="#fff"
+                        />
                         <Label size={13}>Remember me</Label>
                       </Pressable>
                       <LinkButton
@@ -835,14 +830,6 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     minHeight: 44,
-  },
-  checkbox: {
-    width: 17,
-    height: 17,
-    borderRadius: 3,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
   switch: {
     flexDirection: "row",

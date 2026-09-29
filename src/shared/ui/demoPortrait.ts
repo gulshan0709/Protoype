@@ -34,11 +34,6 @@ export function portraitSource(
   return portraitImages[choice.id]?.[choice.file];
 }
 
-/** Pool portrait for a fictional person without an uploaded photo (full HD unless `size` <= 96). */
-export function portraitFor(name: string, size?: number): ImageSourcePropType | undefined {
-  return portraitSource(name, { size });
-}
-
 /**
  * Source for a stored profile image: an uploaded photo as is, a bundled dummy photo as the
  * person's pool portrait (the dummy's own owner when no name is given).

@@ -2,9 +2,15 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-// Loads src/**/*.ts the way Metro does (extensionless imports, JSON imports).
-require("../scripts/lib/ts-hooks.cjs");
-const { parsePersonName, firstNameGender } = require("../src/shared/people/personName.ts");
+const { eachPage } = require("./helpers.cjs");
+const {
+  parsePersonName,
+  parseTitledPerson,
+  firstNameGender,
+  nameInitials,
+  nameFromEmail,
+} = require("../src/shared/people/personName.ts");
+const { avatarGradient, AVATAR_GRADIENTS, AVATAR_NEUTRAL } = require("../src/shared/people/avatarColors.ts");
 const {
   portraitIdFor,
   portraitIds,
@@ -128,21 +134,17 @@ test("parsePersonName rejects organisations, roles, places, teams and products",
 });
 
 test("the name lists include every demo name pool", () => {
-  const source = fs.readFileSync(path.join(root, "src/domain/contracts/demoVolume.ts"), "utf8");
-  const pool = (name) => {
-    const at = source.indexOf(`const ${name} = [`);
-    return JSON.parse(source.slice(source.indexOf("[", at), source.indexOf("]", at) + 1));
-  };
+  const pools = require("../src/domain/common/names.ts");
   const cases = [
-    ["indianFemale", (w) => w + " Sharma", "woman", "south-asian"],
-    ["indianMale", (w) => w + " Sharma", "man", "south-asian"],
-    ["westernFemale", (w) => w + " Brooks", "woman", "international"],
-    ["westernMale", (w) => w + " Brooks", "man", "international"],
-    ["indianLast", (w) => "Rachel " + w, "woman", "south-asian"],
-    ["westernLast", (w) => "Rachel " + w, "woman", "international"],
+    ["INDIAN_FEMALE", (w) => w + " Sharma", "woman", "south-asian"],
+    ["INDIAN_MALE", (w) => w + " Sharma", "man", "south-asian"],
+    ["WESTERN_FEMALE", (w) => w + " Brooks", "woman", "international"],
+    ["WESTERN_MALE", (w) => w + " Brooks", "man", "international"],
+    ["INDIAN_LAST", (w) => "Rachel " + w, "woman", "south-asian"],
+    ["WESTERN_LAST", (w) => "Rachel " + w, "woman", "international"],
   ];
   for (const [list, text, gender, look] of cases)
-    for (const word of pool(list)) {
+    for (const word of pools[list]) {
       const p = parsePersonName(text(word));
       assert.ok(p, text(word));
       assert.deepEqual([p.gender, p.look], [gender, look], `${list}: ${text(word)}`);
@@ -201,18 +203,14 @@ test("learner setup gender follows the learner's name", () => {
   const label = { woman: "Female", man: "Male" };
   const wrong = [];
   let learners = 0;
-  for (const areas of Object.values(industries.education.pages))
-    for (const branch of Object.values(areas))
-      for (const tabs of Object.values(branch))
-        for (const base of Object.values(tabs))
-          for (const page of [base, ...Object.values(base.variants ?? {})])
-            for (const r of page.records) {
-              if (r.setupKind !== "learner" || r.setup?.gender === undefined) continue;
-              learners++;
-              const name = [r.setup.first_name, r.setup.last_name].filter(Boolean).join(" ");
-              const expected = label[parsePersonName(name)?.gender] ?? "";
-              if (r.setup.gender !== expected) wrong.push(`${page.id} ${name}: ${r.setup.gender}, expected ${expected}`);
-            }
+  for (const { page } of eachPage(industries.education))
+    for (const r of page.records) {
+      if (r.setupKind !== "learner" || r.setup?.gender === undefined) continue;
+      learners++;
+      const name = [r.setup.first_name, r.setup.last_name].filter(Boolean).join(" ");
+      const expected = label[parsePersonName(name)?.gender] ?? "";
+      if (r.setup.gender !== expected) wrong.push(`${page.id} ${name}: ${r.setup.gender}, expected ${expected}`);
+    }
   assert.deepEqual(wrong, []);
   assert.ok(learners >= 60, "learner rows: " + learners);
 });
@@ -251,34 +249,106 @@ test("the same name always maps to the same portrait", () => {
   for (const [name, assigned] of Object.entries(assignments)) assert.equal(portraitIdFor(name), assigned, name);
 });
 
-test("names outside the demo data hash stably into their own group", () => {
-  const cases = [
-    ["Priyanka Chawla", "woman", "south-asian"],
-    ["Rohan Zaveri", "man", "south-asian"],
-    ["Zara Whitfield", "woman", "international"],
-    ["Hiro Nakamura", "man", "international"],
-  ];
-  for (const [name, gender, look] of cases) {
+test("names outside the demo data have no pool portrait, so their avatar shows initials", () => {
+  // People added during a session and the signed-in user have no photo until one is uploaded.
+  for (const name of ["Priyanka Chawla", "Rohan Zaveri", "Zara Whitfield", "Hiro Nakamura", "Gulshan Kumar", "Q. Rao"]) {
     assert.equal(assignments[name], undefined, name);
-    const id = portraitIdFor(name);
-    assert.ok(portraitIds(gender, look).includes(id), `${name} → ${id}`);
-    assert.equal(portraitIdFor("Dr. " + name), id);
-    assert.equal(portraitIdFor(name), id);
+    assert.equal(portraitIdFor(name), undefined, name);
+    assert.equal(portraitIdFor("Dr. " + name), undefined, name);
+    assert.equal(portraitChoice(name, { size: 38 }), undefined, name);
   }
-  const spread = new Set(Array.from({ length: 60 }, (_, i) => portraitIdFor(`Priya ${String.fromCharCode(65 + (i % 26))}ab${String.fromCharCode(97 + Math.floor(i / 26))}`)));
-  assert.ok(spread.size > 20, "fallback spreads over the pool: " + spread.size);
-  // An initial form outside the data hashes within its own (hashed) gender and surname look.
-  const rao = parsePersonName("Q. Rao");
-  assert.equal(assignments["Q. Rao"], undefined);
-  assert.ok(portraitIds(rao.gender, "south-asian").includes(portraitIdFor("Q. Rao")));
   for (const text of ["Zeynep Kaya", "Customer Admin", "", "Kavita", "K. R."]) assert.equal(portraitIdFor(text), undefined, text);
+  // An uploaded photo still wins for them.
+  assert.deepEqual(portraitChoice("Gulshan Kumar", { image: "blob:http://localhost/2" }), { uri: "blob:http://localhost/2" });
   assert.deepEqual(
     ["woman", "man"].flatMap((g) => ["south-asian", "international"].map((l) => portraitIds(g, l).length)),
     [48, 24, 48, 24],
   );
 });
 
-test("portraitChoice: uploaded photos win; dummy photos and missing images use the pool", () => {
+test("an unlisted first name before a known surname is a person without a gender", () => {
+  assert.deepEqual(parsePersonName("Gulshan Kumar"), { name: "Gulshan Kumar", initials: "GK", look: "south-asian" });
+  assert.deepEqual(parsePersonName("Dr. Gulshan Kumar · E1001"), {
+    name: "Gulshan Kumar",
+    initials: "GK",
+    look: "south-asian",
+    uid: "E1001",
+  });
+  assert.equal(parsePersonName("Gulshan Kumar Singh").initials, "GS");
+  // Roles, organisations and initials before the surname stay out ("Officer S. Chopra" data typos too).
+  for (const text of ["Warden Rao", "Security Singh", "Departmentr S. Chopra", "Gulshan", "gulshan kumar", "Gulshan Brooks"])
+    assert.equal(parsePersonName(text), undefined, text);
+});
+
+test("wardens named by role and surname are people with initials, never pool portraits", () => {
+  assert.deepEqual(parseTitledPerson("Warden Rao"), { name: "Warden Rao", initials: "R", look: "south-asian" });
+  assert.equal(parseTitledPerson("Warden Iyer · Hostel C").name, "Warden Iyer");
+  for (const text of ["Warden Assistant", "Chief Warden", "Guard Supervisor", "Guard Tour", "Warden", "Kavita Rao", "Warden Rao Singh"])
+    assert.equal(parseTitledPerson(text), undefined, text);
+  // The portrait logic still treats them as roles.
+  assert.equal(parsePersonName("Warden Rao"), undefined);
+  assert.equal(portraitIdFor("Warden Rao"), undefined);
+  assert.equal(nameInitials("Warden Rao"), "R");
+  assert.equal(nameInitials("Warden Iyer"), "I");
+  assert.equal(nameInitials("Warden"), "W");
+  // Warden rows resolve an identity from their Name column, whatever the name.
+  const { userIdentity } = require("../src/domain/contracts/userIdentity.ts");
+  const row = (warden) => ({ id: "W1", type: "warden", cells: { warden, email: "—" }, detail: { title: warden, facts: [] } });
+  assert.equal(userIdentity(row("Warden Rao")).name, "Warden Rao");
+  assert.equal(userIdentity(row("Zeynep Kaya")).name, "Zeynep Kaya");
+});
+
+test("nameInitials: first and last initial of any name", () => {
+  const cases = {
+    "Gulshan Kumar": "GK",
+    "Dr. Gulshan Kumar · E1001": "GK",
+    "Gulshan Kumar Singh": "GS",
+    "gulshan kumar": "GK",
+    Gulshan: "G",
+    "K. Nair · contractor": "KN",
+    "Alex Morgan": "AM",
+    "Émile Zola": "ÉZ",
+    "  ": "",
+    "": "",
+    "— ·": "",
+    "gulshan.kumar": "GK",
+    "Jean-Luc": "JL",
+    "Mary Smith-Jones": "MS",
+  };
+  for (const [text, initials] of Object.entries(cases)) assert.equal(nameInitials(text), initials, text);
+  assert.equal(nameInitials(undefined), "");
+});
+
+test("nameFromEmail turns the sign-in email into a display name", () => {
+  assert.equal(nameFromEmail("gulshan.kumar@reslt.ai"), "Gulshan Kumar");
+  assert.equal(nameFromEmail("  gulshan_kumar+qa@reslt.ai "), "Gulshan Kumar Qa");
+  assert.equal(nameFromEmail("qa@vizenta.ai"), "Qa");
+  assert.equal(nameFromEmail("ravi.singh2@x.io"), "Ravi Singh2");
+  assert.equal(nameFromEmail("1234@x.io"), "1234");
+  assert.equal(nameFromEmail(""), "");
+  assert.equal(nameInitials(nameFromEmail("gulshan.kumar@reslt.ai")), "GK");
+  assert.ok(parsePersonName(nameFromEmail("gulshan.kumar@reslt.ai")));
+});
+
+test("avatar gradients are stable per person and spread over the palette", () => {
+  assert.equal(avatarGradient("Gulshan Kumar"), avatarGradient("Dr. Gulshan Kumar · E1001"));
+  assert.equal(avatarGradient("Gulshan Kumar"), avatarGradient("gulshan  kumar"));
+  assert.equal(avatarGradient(""), AVATAR_NEUTRAL);
+  const used = new Set(["Gulshan Kumar", "Alex Morgan", "Zeynep Kaya", "Priyanka Chawla", "Hiro Nakamura", "Rohan Zaveri", "Zara Whitfield", "Q. Rao", "Ravi Singh", "Neha Rao", "Amit Shah", "Lena Novak"].map(avatarGradient));
+  assert.ok(used.size >= 6, "gradients used: " + used.size);
+  // White initials stay readable: every stop has at least 2.5:1 contrast with white, the end stop 4.5:1.
+  const luminance = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (hex) => 1.05 / (luminance(hex) + 0.05);
+  for (const [from, to] of AVATAR_GRADIENTS) {
+    assert.ok(contrast(from) >= 2.5, `${from}: ${contrast(from).toFixed(2)}`);
+    assert.ok(contrast(to) >= 4.5, `${to}: ${contrast(to).toFixed(2)}`);
+  }
+});
+
+test("portraitChoice: uploaded photos win; dummy photos and missing images use the demo pool", () => {
   const riya = portraitIdFor("Riya Sharma");
   const aarav = portraitIdFor("Aarav Mehta");
   const dummy = (uid) => samples.customer_admin.find((r) => r.setup.uid === uid).setup.image;

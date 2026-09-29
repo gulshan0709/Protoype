@@ -1,9 +1,26 @@
-import React, { useMemo, useState } from "react";
 import { View } from "react-native";
 import { useTheme } from "../../../shared/theme/Theme";
-import { Button, Field, Row, Txt } from "../../../shared/ui/Primitives";
+import { Field, Txt } from "../../../shared/ui/Primitives";
+import { FormActions, FormCell, FormGrid } from "../../../shared/ui/Form";
+import { useFormState } from "../../../shared/ui/useFormState";
 import { type Marking, TIME, minutes } from "../../../domain/gate/attendance";
 import { PersonOr } from "./PersonChip";
+
+function validateMarking(m: Marking) {
+  const e: Partial<Record<keyof Marking, string>> = {};
+  if (!m.checkIn) e.checkIn = "Check-in time is required";
+  else if (!TIME.test(m.checkIn)) e.checkIn = "Use 24-hour HH:MM";
+  if (m.checkOut && !TIME.test(m.checkOut)) e.checkOut = "Use 24-hour HH:MM";
+  else if (
+    m.checkOut &&
+    !e.checkIn &&
+    minutes(m.checkOut) <= minutes(m.checkIn)
+  )
+    e.checkOut = "Check-out must be after check-in";
+  if (!m.reason.trim()) e.reason = "A reason is required for the audit trail";
+  return e;
+}
+
 export function MarkAttendanceForm({
   title,
   onSave,
@@ -14,29 +31,12 @@ export function MarkAttendanceForm({
   onCancel: () => void;
 }) {
   const c = useTheme();
-  const [m, setM] = useState<Marking>({
-    checkIn: "",
-    checkOut: "",
-    reason: "",
-  });
-  const [submitted, setSubmitted] = useState(false);
-  const errors = useMemo(() => {
-    const e: Partial<Record<keyof Marking, string>> = {};
-    if (!m.checkIn) e.checkIn = "Check-in time is required";
-    else if (!TIME.test(m.checkIn)) e.checkIn = "Use 24-hour HH:MM";
-    if (m.checkOut && !TIME.test(m.checkOut)) e.checkOut = "Use 24-hour HH:MM";
-    else if (
-      m.checkOut &&
-      !e.checkIn &&
-      minutes(m.checkOut) <= minutes(m.checkIn)
-    )
-      e.checkOut = "Check-out must be after check-in";
-    if (!m.reason.trim()) e.reason = "A reason is required for the audit trail";
-    return e;
-  }, [m]);
-  const set = (k: keyof Marking) => (v: string) =>
-    setM((x) => ({ ...x, [k]: v }));
-  const err = (k: keyof Marking) => (submitted ? errors[k] : undefined);
+  const {
+    value: m,
+    set,
+    err,
+    submit,
+  } = useFormState({ checkIn: "", checkOut: "", reason: "" }, validateMarking);
   return (
     <View style={{ gap: 16 }}>
       <PersonOr text={title}>
@@ -47,8 +47,8 @@ export function MarkAttendanceForm({
           </Txt>
         </Txt>
       </PersonOr>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-        <View style={{ flexGrow: 1, flexBasis: 180 }}>
+      <FormGrid>
+        <FormCell basis={180}>
           <Field
             label="Check-in time *"
             value={m.checkIn}
@@ -56,8 +56,8 @@ export function MarkAttendanceForm({
             placeholder="HH:MM, e.g. 09:05"
             error={err("checkIn")}
           />
-        </View>
-        <View style={{ flexGrow: 1, flexBasis: 180 }}>
+        </FormCell>
+        <FormCell basis={180}>
           <Field
             label="Check-out time"
             value={m.checkOut}
@@ -65,8 +65,8 @@ export function MarkAttendanceForm({
             placeholder="HH:MM, e.g. 17:30"
             error={err("checkOut")}
           />
-        </View>
-      </View>
+        </FormCell>
+      </FormGrid>
       <Field
         label="Reason *"
         value={m.reason}
@@ -79,17 +79,11 @@ export function MarkAttendanceForm({
         Manual marks are labelled "Present · manual" and keep the reason in the
         activity trail.
       </Txt>
-      <Row style={{ justifyContent: "flex-end", gap: 8 }}>
-        <Button label="Cancel" onPress={onCancel} />
-        <Button
-          label="Mark attendance"
-          variant="primary"
-          onPress={() => {
-            setSubmitted(true);
-            if (!Object.keys(errors).length) onSave(m);
-          }}
-        />
-      </Row>
+      <FormActions
+        submitLabel="Mark attendance"
+        onCancel={onCancel}
+        onSubmit={submit(onSave)}
+      />
     </View>
   );
 }

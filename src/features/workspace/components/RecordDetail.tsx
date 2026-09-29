@@ -11,7 +11,6 @@ import { MediaPlayer } from "./RecordMedia";
 import { ClassAttendance } from "./ClassAttendance";
 import { DecisionBar } from "./Priority";
 import { missionFor } from "../../../domain/contracts/priority";
-import React from "react";
 import { View } from "react-native";
 import type {
   Action,
@@ -20,6 +19,7 @@ import type {
 } from "../../../domain/contracts/types";
 import { useApp } from "../../../application/AppProvider";
 import { cellText } from "../../../domain/contracts/logic";
+import { sameWorkspace } from "../../../domain/contracts/lifecycle";
 import { useTheme } from "../../../shared/theme/Theme";
 import {
   Row,
@@ -27,9 +27,11 @@ import {
   Txt,
   Badge,
   Button,
+  LabeledValue,
   SectionTitle,
 } from "../../../shared/ui/Primitives";
 import { Icon } from "../../../shared/ui/Icon";
+import { formatAuditTime, humanize } from "../../../shared/ui/format";
 export function RecordDetail({
   page,
   record,
@@ -58,9 +60,7 @@ export function RecordDetail({
     (e) =>
       e.recordId === record.id &&
       e.pageId === page.id &&
-      e.workspace.industry === workspace.industry &&
-      e.workspace.role === workspace.role &&
-      e.workspace.scope === workspace.scope,
+      sameWorkspace(e.workspace, workspace),
   );
   return (
     <View style={{ gap: 22 }}>
@@ -73,7 +73,7 @@ export function RecordDetail({
       )}
       <View style={{ gap: 8 }}>
         <Txt size={10} bold color={c.link} style={{ letterSpacing: 1.8 }}>
-          {d.eyebrow.replaceAll("-", " ").replaceAll("_", " ").toUpperCase()}
+          {humanize(d.eyebrow).toUpperCase()}
         </Txt>
         {personIdentity(record) ? (
           <UserIdentity record={record} size={PERSON_HEADER} />
@@ -119,19 +119,17 @@ export function RecordDetail({
               }}
             >
               {d.facts.map((fact, i) => (
-                <View
+                <LabeledValue
                   key={`${fact.label}-${i}`}
+                  label={fact.label}
                   style={{ width: "45%", gap: 6 }}
                 >
-                  <Txt size={11} color={c.muted}>
-                    {fact.label}
-                  </Txt>
                   <PersonOr text={cellText(fact.value)}>
                     <Txt size={13} bold>
                       {cellText(fact.value)}
                     </Txt>
                   </PersonOr>
-                </View>
+                </LabeledValue>
               ))}
             </View>
           </Card>
@@ -179,11 +177,13 @@ export function RecordDetail({
             <View style={{ gap: 22, marginTop: 23 }}>
               {[
                 ...events.map((e) => ({
-                  time: new Date(e.at).toLocaleString(),
+                  time: formatAuditTime(e.at),
                   event: `${e.action} · ${e.reason}`,
                   actor: e.actor,
+                  // Your own actions: always a person, whatever the display name.
+                  self: true,
                 })),
-                ...d.timeline,
+                ...d.timeline.map((e) => ({ ...e, self: false })),
               ].map((event, i) => (
                 <Row key={i} style={{ alignItems: "flex-start" }}>
                   <View style={{ paddingTop: 4 }}>
@@ -197,11 +197,15 @@ export function RecordDetail({
                     <Txt size={11} bold>
                       {event.event}
                     </Txt>
-                    <PersonOr text={event.actor} size={PERSON_INLINE}>
-                      <Txt size={10} color={c.muted}>
-                        {event.actor ?? "Source service"}
-                      </Txt>
-                    </PersonOr>
+                    {event.self && event.actor ? (
+                      <PersonChip name={event.actor} size={PERSON_INLINE} />
+                    ) : (
+                      <PersonOr text={event.actor} size={PERSON_INLINE}>
+                        <Txt size={10} color={c.muted}>
+                          {event.actor ?? "Source service"}
+                        </Txt>
+                      </PersonOr>
+                    )}
                     <Txt size={9} color={c.subtle}>
                       {event.time}
                     </Txt>
